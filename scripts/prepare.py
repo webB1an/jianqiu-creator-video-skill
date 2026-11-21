@@ -209,15 +209,15 @@ def finish_prepare(staging,pins,fps,pieces,cursor,shots,captions,voice_takes,bea
     if beats:timeline['beats']=beats
     if presenter_source:timeline['presenter_source']=presenter_source
     if edit:
+        from section_pace import evidence_readings
+        readings = evidence_readings(edit, timeline)
+        if readings:
+            timeline['evidence_readings'] = readings
         from picture_holds import planned_still_holds
         holds = planned_still_holds(edit, timeline)
         if holds:
             timeline['still_picture_notes'] = holds
             print('Review narrated stills before rendering:', ', '.join(row['target'] for row in holds), file=sys.stderr)
-        from section_pace import evidence_readings
-        readings = evidence_readings(edit, timeline)
-        if readings:
-            timeline['evidence_readings'] = readings
     (staging/'timeline.json').write_text(json.dumps(timeline,indent=2))
     return timeline
 

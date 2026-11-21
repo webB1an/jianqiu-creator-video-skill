@@ -1,5 +1,6 @@
 """Animate project PNGs on a shot's frame clock and composite them over graded footage."""
 from bisect import bisect_right
+from copy import deepcopy
 from dataclasses import dataclass
 import math
 from pathlib import Path
@@ -81,6 +82,36 @@ class LayerCamera:
 
     def view(self, frame):
         return sample_keys(self.frames, self.views, 'flow', self.tangents, frame)
+
+
+def word_fields(shot):
+    """Yield declared time anchors, leaving numeric keys on their original frame clock."""
+    groups = [shot.get('layer_camera')]
+    layers = shot.get('motion_layers')
+    if isinstance(layers, list):
+        for layer in layers:
+            if isinstance(layer, dict):
+                if isinstance(layer.get('end'), str):
+                    yield layer, 'end'
+                groups.append(layer.get('keys'))
+    for keys in groups:
+        if isinstance(keys, list):
+            for key in keys:
+                if isinstance(key, dict) and isinstance(key.get('frame'), str):
+                    yield key, 'frame'
+
+
+def resolve_shot(shot, timeline, timing):
+    """Translate spoken programme cues to local picture frames for every consumer."""
+    if not any(word_fields(shot)):
+        return shot
+    from remotion_library import resolve_frame
+    resolved = deepcopy(shot)
+    # Offsets use [first, end). A layer can disappear at the cut itself.
+    exclusive = dict(timing, frames=timing['frames'] + 1)
+    for entry, field in word_fields(resolved):
+        entry[field] = resolve_frame(entry[field], timeline, exclusive if field == 'end' else timing)
+    return resolved
 
 
 def parse_camera(shot, frames):

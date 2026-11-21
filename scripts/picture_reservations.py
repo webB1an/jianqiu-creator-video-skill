@@ -15,10 +15,14 @@ def overlaps(a, b):
 
 
 def protected_regions(shot, frames):
-    """Yield the existing caption_avoid entries on the local picture clock."""
+    """Protect the original readout and authored obstacles on this shot's local clock."""
     rows = shot.get('caption_avoid', [])
     if not isinstance(rows, list):
         raise ValueError(f"{shot['id']}: caption_avoid must be a list")
+    reading = shot.get('evidence_read', {})
+    if 'readback' in reading:
+        readback = reading['readback']
+        rows = [*rows, dict(label=readback['text'], frames=reading['watch'], box=readback['roi'])]
     for row in rows:
         if not isinstance(row, dict) or not isinstance(row.get('label'), str) or not row['label'].strip():
             raise ValueError(f"{shot['id']}: give each protected region a label")

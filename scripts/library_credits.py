@@ -37,6 +37,7 @@ def used_inputs(edit, timeline):
     result = []
     for shot in edit['shots']:
         timing = schedule[shot['id']]
+        shot = motion_layers.resolve_shot(shot, timeline, timing)
         start = shot.get('in', 0)
         # The exporter loops still images. Time ranges only apply to moving media.
         still = Path(shot['visual']).suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}

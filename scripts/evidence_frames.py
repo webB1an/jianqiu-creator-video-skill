@@ -41,15 +41,62 @@ def literal(text):
                    for c in text.replace('−', '-') if not c.isspace())
 
 
+def reading_target(reading, confirmed, gaps):
+    """Find one continuous interval that meets both authored reading targets."""
+    first, end = reading['first_readable_frame'], reading['visible_until_frame']
+    following, reveal = reading.get('next_information_frame'), reading['reveal_frame']
+    stop = end if following is None else min(end, following)
+    available = max(0, stop-first)
+    preview = reading.get('min_preview_frames', 0)
+    length = max(1, preview, reading.get('min_read_frames', 0))
+    before = max(0, min(stop, reveal)-first)
+    result = dict(deadline_frame=stop, required_frames=length, required_before_reveal_frames=preview,
+                  available_frames=available, available_before_reveal_frames=before)
+    # Even when no independent preview is requested, the first readable frame
+    # must arrive by the reveal word, as in section_pace.reading_recut.
+    late = max(0, first-reveal)
+    if available < length or before < preview or late:
+        return dict(result, status='timeline_short', short_by_frames=max(0, length-available),
+                    preview_short_by_frames=max(0, preview-before), first_readable_late_by_frames=late)
+
+    # Slide a fixed-length window through the eligible starts. Prefer the fewest
+    # unconfirmed frames, breaking ties at the earliest cut that serves the voice.
+    matched = bytearray(available)
+    for span in confirmed:
+        a, b = max(first, span['start_frame']), min(stop, span['end_frame'])
+        if b > a:
+            matched[a-first:b-first] = b'\x01' * (b-a)
+    last_start = min(stop-length, reveal-preview)
+    best, score = first, sum(matched[:length])
+    current = score
+    for offset in range(1, last_start-first+1):
+        if score == length:
+            break
+        current += matched[offset+length-1] - matched[offset-1]
+        if current > score:
+            best, score = first+offset, current
+    result.update(start_frame=best, end_frame=best+length, unconfirmed_frames=length-score)
+    if score == length:
+        return dict(result, status='confirmed')
+    inspect = []
+    for gap in gaps:
+        a, b = max(best, gap['start_frame']), min(best+length, gap['end_frame'])
+        if a < b:
+            span = dict(start_frame=a, end_frame=b)
+            if 'sample_sheet' in gap:
+                span['sample_sheet'] = gap['sample_sheet']
+            inspect.append(span)
+    return dict(result, status='inspect_frames', inspect_spans=inspect)
+
+
 def readback_report(movie, timeline, view_width, recognize, *, proof_dir=None):
     """OCR each distinct native-size crop, at every programme frame of the authored read window."""
     from PIL import Image, ImageDraw
 
     checks = []
     active = {}
-    for r in timeline.get('evidence_readings', []):
-        if 'readback' not in r:
-            continue
+    readings = [r for r in timeline.get('evidence_readings', []) if 'readback' in r]
+    for r in readings:
         spec = readback_spec(r['readback'])
         start, end = r['first_readable_frame'], r['visible_until_frame']
         if not 0 <= start < end <= timeline['frames']:
@@ -108,7 +155,7 @@ def readback_report(movie, timeline, view_width, recognize, *, proof_dir=None):
                 runs[-1]['end_frame'] = n+1
             else:
                 runs.append(dict(start_frame=n, end_frame=n+1, recognized=text, matches=match))
-        for i, check in enumerate(checks, 1):
+        for i, (check, reading) in enumerate(zip(checks, readings, strict=True), 1):
             check['first_match_frame'] = next((r['start_frame'] for r in check['runs'] if r['matches']), None)
             check['unconfirmed_frames'] = sum(r['end_frame'] - r['start_frame'] for r in check['runs'] if not r['matches'])
             gaps, visible = [], []
@@ -140,5 +187,7 @@ def readback_report(movie, timeline, view_width, recognize, *, proof_dir=None):
                     gap['sample_sheet'] = f'readback-{i:02}-gap-{j:02}.png'
                     sheet.save(proof_dir/gap['sample_sheet'])
             check['unconfirmed_spans'] = gaps
+            if 'min_read_frames' in reading or 'min_preview_frames' in reading:
+                check['reading_target'] = reading_target(reading, visible, gaps)
             check['view_width'] = view_width
     return checks

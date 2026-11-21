@@ -61,7 +61,7 @@ PY="$HOME/.cache/creator-video-env/bin/python"
 
 ### 把身份条排在证据读完后的空档
 
-当人物介绍可以稍晚出现时，先把原件上要保护的读数或出处按出现时段登记在镜头的 `caption_avoid`。在同一镜的 `remotion_effect` 增加 `placement`。用预览确认身份条从滑入到停稳占用的总范围，将这个框填入 `box`，四个数依次是画面宽高归一化的左、上、右、下边界。姓名、职务、字号或取景变动后重新核对这个框。实拍底片填在 `remotion_effect.background`，保持 `params.background` 透明，读数在身份条让开时仍能看到。
+当人物介绍可以稍晚出现时，已登记的 `evidence_read` 会用读字框 `readback.roi` 和镜内 `watch` 直接保留阅读时段。需要避开的其他原件、出处或人脸按实际占位登记在 `caption_avoid`。在同一镜的 `remotion_effect` 增加 `placement`。用预览确认身份条从滑入到停稳占用的总范围，将这个框填入 `box`，四个数依次是画面宽高归一化的左、上、右、下边界。姓名、职务、字号或取景变动后重新核对这个框。实拍底片填在 `remotion_effect.background`，保持 `params.background` 透明，读数在身份条让开时仍能看到。
 
 ```json
 {

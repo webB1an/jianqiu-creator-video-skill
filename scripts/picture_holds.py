@@ -107,19 +107,53 @@ def select_picture_holds(shots, fps, captions, *, takes=None, components=(), win
     return sorted(unique.values(), key=lambda r: (r['start_frame'], r['end_frame'], r['target']))
 
 
+def planned_quiet_spans(shot, timing, timeline):
+    """Estimate still intervals on the programme clock from the same layer poses used by export."""
+    from transitions import STILLS
+    if Path(shot.get('visual', '')).suffix.lower() not in STILLS:
+        return []
+    start, frames = timing['start_frame'], timing['frames']
+    if not shot.get('motion_layers'):
+        return [dict(start_frame=start, end_frame=start+frames)]
+
+    from motion_layers import parse, parse_camera, project_pose, resolve_shot
+    shot = resolve_shot(shot, timeline, timing)
+    layers, camera = parse(shot, frames), parse_camera(shot, frames)
+    def appearance(frame):
+        view = camera.view(frame) if camera else None
+        poses = []
+        for layer in layers:
+            pose = layer.pose(frame)
+            # A hidden sprite can still have changing coordinates or an active camera.
+            visible = pose is not None and pose[3] > 0 and pose[5] > 0
+            poses.append(project_pose(pose, view, layer.depth) if visible else None)
+        return poses
+
+    spans = []
+    first, previous = 0, appearance(0)
+    minimum = max(2, math.ceil(.6 * timeline['fps']))
+    for frame in range(1, frames+1):
+        current = appearance(frame) if frame < frames else None
+        if current != previous:
+            if frame-first >= minimum or (first == 0 and frame == frames):
+                spans.append(dict(start_frame=start+first, end_frame=start+frame))
+            first, previous = frame, current
+    return spans
+
+
 def planned_still_holds(edit, timeline):
     """Early editorial note for still files played under speech. Encoded-picture checks cover every input type."""
-    from transitions import STILLS
     shots = []
     for shot, t in zip(edit['shots'], timeline['shots']):
         start, end = t['start_frame'], t['start_frame'] + t['frames']
-        plain = Path(shot.get('visual', '')).suffix.lower() in STILLS and not shot.get('motion_layers')
-        spans = [dict(start_frame=start, end_frame=end)] if plain else []
+        spans = planned_quiet_spans(shot, t, timeline)
         shots.append(dict(shot=t['id'], start_frame=start, end_frame=end, longest_quiet_spans=spans))
     takes = timeline.get('voice_takes', [])
     lines = [(t['start_sample']/t['sample_rate'], t['end_sample']/t['sample_rate'], t['spoken'])
              for t in takes if all(k in t for k in ('start_sample', 'end_sample', 'sample_rate', 'spoken'))]
-    return select_picture_holds(shots, timeline['fps'], lines, takes=takes)
+    windows = [dict(start=r['first_readable_frame'], end=r['visible_until_frame'],
+                    subject=r['shot'], discovery=r['discovery']) for r in timeline.get('evidence_readings', [])]
+    return select_picture_holds(shots, timeline['fps'], lines, takes=takes, windows=windows)
 
 
 def check_picture_holds(media, record, decision):

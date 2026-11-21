@@ -94,6 +94,7 @@ def render_frames(folder, edit, timeline, prepared_covers, captions, pins, statu
         pic=path.suffix.lower() in STILLS
         before, after = source_handles(edit['shots'], edges, index)
         render_frames_count = before + frames + after
+        shot = motion_layers.resolve_shot(shot, timeline, timing)
         layers = motion_layers.parse(shot, frames)
         camera = motion_layers.parse_camera(shot, frames)
         layer_paths = [pins.pin(layer.file) for layer in layers]

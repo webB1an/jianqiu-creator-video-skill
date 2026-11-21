@@ -4,7 +4,8 @@ from statistics import median
 
 
 def required_word_lines(edit, pins):
-    """Align only lines referenced by a directed sound or reading event."""
+    """Align only lines referenced by a directed sound, picture or reading event."""
+    from motion_layers import word_fields
     cues = list(edit.get('music_cues', []))
     plan = edit.get('sfx_plan')
     if plan:
@@ -14,6 +15,7 @@ def required_word_lines(edit, pins):
     anchors = [cue.get('at') for cue in cues]
     for shot in edit['shots']:
         anchors.extend(shot.get('remotion_effect', {}).get('cues', {}).values())
+        anchors.extend(entry[field] for entry, field in word_fields(shot))
         reading = shot.get('evidence_read', {})
         anchors.extend((reading.get('reveal_word'), reading.get('next_information')))
     return {value[1:].split(':', 1)[0] for value in anchors if isinstance(value, str) and value.startswith('@')}
