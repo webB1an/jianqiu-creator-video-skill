@@ -24,8 +24,9 @@ def render_window(start, end, output, calibration):
         if expected and digest(pins.pin('audio/narration.wav')) != expected:
             raise ValueError('Prepared narration changed. Re-run prepare.py.')
         check_audio_request(edit)
-        cues = resolve_cues(edit, timeline)
-        mix = mix_stems(ff, work, edit, timeline, pins.pin, cues)
+        cues = resolve_cues(edit, timeline, pins.pin)
+        report = {}
+        mix = mix_stems(ff, work, edit, timeline, pins.pin, cues, audio_report=report)
         measured = (levels(mix) if calibration is None else
                     json.loads(pins.pin(calibration).read_text())['mix_normalization'])
         if output.resolve() in {Path(name).resolve() for name in pins.hashes}:
@@ -45,7 +46,7 @@ def render_window(start, end, output, calibration):
                 raise ValueError('Mixed window does not contain the requested number of samples')
             pins.verify()
             os.replace(staged, output)
-        status.update(frame_range=[start, end], output=str(output), music_cues=cues)
+        status.update(frame_range=[start, end], output=str(output), music_cues=cues, **report)
 
 
 if __name__ == '__main__':

@@ -22,7 +22,7 @@ def difference(a, b):
     return float(np.mean(np.abs(a - b) >= MIN_PIXEL_DELTA))
 
 
-def inspect_rhythm(master, timeline, bridges, subs):
+def inspect_rhythm(master, timeline, bridges, subs, *, components=(), windows=()):
     """Measure motion on luma and find near-uniform colour fields in the picture body."""
     fps = timeline['fps']
     frame_count = timeline['frames']
@@ -95,6 +95,9 @@ def inspect_rhythm(master, timeline, bridges, subs):
                             motion_frames += 1
                     previous = current
                 keep_hold(run_start, end, holds)
+                quiet_spans = [dict(start_frame=a, end_frame=b) for a, b in holds]
+                if not holds and end-start < minimum and end-start >= .6*fps and run_start == start:
+                    quiet_spans.append(dict(start_frame=start, end_frame=end))
                 longest = sorted(holds, key=lambda span: span[1]-span[0], reverse=True)[:3]
                 samples = [dict(start_frame=a, end_frame=b, seconds=round((b-a)/fps, 3),
                                 captions=[text for lo,hi,text in subs if lo < b/fps and a/fps < hi])
@@ -102,7 +105,7 @@ def inspect_rhythm(master, timeline, bridges, subs):
                 result.append(dict(shot=shot['id'], start_frame=start, end_frame=end,
                                    changing_frame_fraction=round(motion_frames/max(1, end-start-1), 4),
                                    quiet_seconds=round(sum(b-a for a,b in holds)/fps, 3),
-                                   longest_quiet_spans=samples))
+                                   quiet_spans=quiet_spans, longest_quiet_spans=samples))
                 frames_seen = end
             if frames_seen != frame_count or process.stdout.read(1):
                 raise ValueError('Encoded picture frame count differs from the rhythm timeline')
@@ -112,12 +115,13 @@ def inspect_rhythm(master, timeline, bridges, subs):
             if process.poll() is None:
                 process.terminate()
 
-    return dict(method='luma_change', proxy_size=[WIDTH, HEIGHT],
+    return dict(method='luma_change', spoken_hold_version=2, proxy_size=[WIDTH, HEIGHT],
                 proxy_rows=[BODY.start, BODY.stop], pixel_delta=MIN_PIXEL_DELTA,
                 minimum_changed_fraction=MIN_AREA_FRACTION, minimum_quiet_seconds=minimum/fps,
                 shots=result, seams=seams, flat_picture_candidates=flat_spans,
                 flat_picture_max_rgb_std_below=FLAT_RGB_STD,
-                hold_candidates=select_picture_holds(result, fps, subs))
+                hold_candidates=select_picture_holds(result, fps, subs, takes=timeline.get('voice_takes'),
+                                                   components=components, windows=windows))
 
 
 if __name__ == '__main__':
@@ -130,11 +134,24 @@ if __name__ == '__main__':
     parser.add_argument('--report', type=Path)
     args = parser.parse_args()
     folder = args.media.parent
-    tl = json.loads((args.timeline or folder/'timeline.json').read_text())
+    timeline_path = args.timeline or folder/'timeline.json'
+    tl = json.loads(timeline_path.read_text())
     tech = folder/'technical.json'
     transitions = json.loads(tech.read_text()).get('transitions') if tech.is_file() else None
     captions = list(read_captions(folder)) if (folder/'captions.srt').is_file() else []
-    value = json.dumps(inspect_rhythm(args.media, tl, transitions, captions), ensure_ascii=False, indent=2)
+    from review_bundle import digest, receipt_for
+    receipt = receipt_for(args.media)
+    manifest = json.loads(receipt.read_text()) if receipt.is_file() else {}
+    windows = manifest.get('viewing_windows', [])
+    probes = manifest.get('component_motion_windows', [])
+    components = []
+    if windows or probes:
+        if manifest.get('sha256') != digest(args.media) or manifest.get('timeline_sha256') != digest(timeline_path):
+            raise ValueError('Use the timeline and picture corresponding to these frozen observation regions')
+        from component_motion import inspect
+        components = inspect(args.media, probes, tl['fps'])
+    value = json.dumps(inspect_rhythm(args.media, tl, transitions, captions, components=components,
+                                      windows=windows), ensure_ascii=False, indent=2)
     if args.report:
         args.report.write_text(value)
     else:

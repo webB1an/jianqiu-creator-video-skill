@@ -1,6 +1,7 @@
 """Search the offline Remotion catalog, stage an editable composition, or render a project shot."""
 
 import argparse
+from copy import deepcopy
 from contextlib import ExitStack, contextmanager
 import fcntl
 import json
@@ -89,7 +90,48 @@ def resolve_frame(anchor, timeline, timing):
     return frame
 
 
-def engine_files(entry):
+def timed_params(settings, timeline, timing):
+    """Resolve word cues on a copy. An indexed path changes one field of an existing layer."""
+    params = deepcopy(settings.get("params", {}))
+    if not isinstance(params, dict):
+        raise ValueError("Effect params must be an object")
+    for path, anchor in settings.get("cues", {}).items():
+        if not re.fullmatch(r"[A-Za-z_]\w*(?:\[\d+\]|\.[A-Za-z_]\w*)*", path):
+            raise ValueError(f"Invalid effect cue path: {path}")
+        target = params
+        keys = re.findall(r"[A-Za-z_]\w*|\d+", path)
+        for key in keys[:-1]:
+            if isinstance(target, list) and key.isdecimal() and int(key) < len(target):
+                target = target[int(key)]
+            elif isinstance(target, dict) and key in target:
+                target = target[key]
+            else:
+                raise ValueError(f"No such layer in effect cue path: {path}")
+        frame = resolve_frame(anchor, timeline, timing)
+        last = keys[-1]
+        if isinstance(target, dict) and not last.isdecimal():
+            target[last] = frame
+        elif isinstance(target, list) and last.isdecimal() and int(last) < len(target):
+            target[int(last)] = frame
+        else:
+            raise ValueError(f"Invalid target in effect cue path: {path}")
+    return params
+
+
+def project_params(shot, timeline, timing):
+    settings = shot["remotion_effect"]
+    params = timed_params(settings, timeline, timing)
+    if "placement" in settings:
+        from picture_reservations import place_lower_third
+        params["startFrame"], params["endFrame"] = place_lower_third(shot, timing["frames"], params)
+    return params
+
+
+def placement_record(settings, params):
+    return dict(frames=[params["startFrame"], params["endFrame"]], box=settings["placement"]["box"])
+
+
+def engine_files(entry, *, placement=False):
     group = entry["group"]
     files = [
         "scripts/remotion_library.py",
@@ -100,6 +142,8 @@ def engine_files(entry):
     ]
     if group == "transitions":
         files.extend(["assets/motion/evidence-cut-view.jsx", "assets/motion/shot-transition-view.jsx"])
+    if placement:
+        files.append("scripts/picture_reservations.py")
     return files
 
 
@@ -144,6 +188,8 @@ def project_lock(project):
 
 
 def stage(spec, base, target, entry, *, film=False):
+    if "placement" in spec and not film:
+        raise ValueError("Resolve placement on the prepared project with render --project and --shot")
     for key in ("width", "height", "fps", "frames"):
         if type(spec.get(key)) is not int or spec[key] < 1:
             raise ValueError(f"{key} must be a positive integer")
@@ -159,7 +205,7 @@ def stage(spec, base, target, entry, *, film=False):
         raise ValueError("Stage into a new or empty directory")
     public = target / "public"
     public.mkdir(parents=True, exist_ok=True)
-    engines = engine_files(entry)
+    engines = engine_files(entry, placement="placement" in spec)
     engine = {name: digest(SKILL / name) for name in engines}
     for name in engines:
         if name.endswith(".jsx"):
@@ -266,9 +312,7 @@ def render(args, entries):
         settings = shot["remotion_effect"]
         w, h = edit.get("size", [1920, 1080])
         spec = dict(settings, width=w, height=h, fps=tl["fps"], frames=timing["frames"])
-        spec["params"] = dict(settings.get("params", {}))
-        for key, anchor in settings.get("cues", {}).items():
-            spec["params"][key] = resolve_frame(anchor, tl, timing)
+        spec["params"] = project_params(shot, tl, timing)
         picture = safe_path(base, shot["visual"])
         if any(
             s is not shot and s.get("visual") and safe_path(base, s["visual"]) == picture
@@ -347,6 +391,8 @@ def render(args, entries):
                 used=used,
                 output_sha256=digest(output),
             )
+            if "placement" in settings:
+                receipt["placement"] = placement_record(settings, spec["params"])
             if target.resolve() in [(base / name).resolve() for name in inputs]:
                 raise ValueError("Visual output overlaps a source input")
             atomic_json(receipt_path, receipt)

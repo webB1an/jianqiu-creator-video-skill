@@ -9,6 +9,11 @@ def intent_from(data):
     if not isinstance(intent, dict) or any(not isinstance(intent.get(k), str) or not intent[k].strip()
                                            for k in ('kind', 'main_point', 'viewer_value')):
         raise ValueError('story_intent requires kind, main_point and viewer_value as nonempty text')
+    if 'transfer_task' in intent:
+        task = intent['transfer_task']
+        if not isinstance(task, dict) or any(not isinstance(task.get(k), str) or not task[k].strip()
+                                             for k in ('question', 'criterion')):
+            raise ValueError('Give the new example and the editor’s expected reasoning in transfer_task')
     return dict(intent)
 
 
@@ -21,6 +26,8 @@ def open_round(record, previous, manifest):
     if (previous and previous['candidate_sha256'] == record['candidate_sha256']
             and previous.get('story_intent') == intent):
         record['first_views'].update(previous.get('first_views', {}))
+        if previous.get('transfer_answers'):
+            record['transfer_answers'] = dict(previous['transfer_answers'])
 
 
 def record_trial(record, prior_rounds, trial):
@@ -60,6 +67,25 @@ def eligible(record):
             if entry['response']['unbriefed'] and entry['response']['playback'] == 'continuous'}
 
 
+def record_transfer(record, data):
+    task = (record.get('story_intent') or {}).get('transfer_task')
+    reviewer = data.get('reviewer')
+    key = reviewer.strip().casefold() if isinstance(reviewer, str) else ''
+    if not task or key not in eligible(record) or record.get('decision'):
+        raise ValueError('Seal the unbriefed first view before asking the transfer question')
+    if data.get('question') != task['question'] or not isinstance(data.get('answer'), str) or not data['answer'].strip():
+        raise ValueError('Record the registered follow-up question and the viewer’s own answer')
+    answers = record.setdefault('transfer_answers', {})
+    if key in answers:
+        if answers[key] == data['answer']:
+            return
+        raise ValueError('Preserve the viewer’s first answer to the new example')
+    answers[key] = data['answer']
+    if record.get('meeting'):
+        record.setdefault('prior_meetings', []).append(record['meeting'])
+        record['meeting'] = None
+
+
 def validate_meeting(record, meeting):
     if not record.get('story_intent'):
         return
@@ -79,6 +105,8 @@ def validate_meeting(record, meeting):
             raise ValueError('Rate main_point and viewer_value separately: matched, partial, or missed')
         if finding.get('attention') not in ('keep', 'revise'):
             raise ValueError('Compare the viewer’s account of attention and choose keep or revise')
+        if key in record.get('transfer_answers', {}) and finding.get('transfer') not in ('matched', 'partial', 'missed'):
+            raise ValueError('Compare the follow-up answer with the registered criterion and explain it in basis')
         if not isinstance(finding.get('basis'), str) or not finding['basis'].strip():
             raise ValueError('Give the comparison with the intended story and the concrete moment that held or lost attention')
         if key == meeting['chair'].strip().casefold():
@@ -96,7 +124,11 @@ def missing(record):
         return ['story:meeting']
     validate_meeting(record, record['meeting'])
     result = []
+    if record['story_intent'].get('transfer_task') and not record.get('transfer_answers'):
+        result.append('story:transfer_answer')
     for r in record['meeting']['story_readings']:
+        if r['reviewer'].strip().casefold() in record.get('transfer_answers', {}) and r.get('transfer') != 'matched':
+            result.append(f"story:{r['reviewer']}:transfer")
         for field in ('main_point', 'viewer_value', 'attention'):
             if r[field] != ('keep' if field == 'attention' else 'matched'):
                 result.append(f"story:{r['reviewer']}:{field}")

@@ -53,6 +53,36 @@ python scripts/scene_audition.py old.mp4 new.mp4 --start 2.75 --end 6.65 --phone
 "$PY" "$SK/scripts/mix_window.py" --start-frame "$A" --end-frame "$B" --levels-from "$OLD_TECH" --output edit/mixed-window.wav
 ```
 
+### 用重读词和动作接触帧定位声音
+
+先原速听一句。想让观众听清「锁住」时，乐床可以在重音之前开始下沉，真实扣上的动作声应对齐金属件接触的那帧。这两个提示可以落在不同位置。
+
+```json
+"music_cues": [
+  {"shot":"latch","at":"@lock:锁住","shift_frames":-4,"fade":0.12,"gain":0.3,"event":"重音前给锁扣留出空间"}
+],
+"sfx_plan":"sfx.json"
+```
+
+在 `sfx.json` 写动作音。例中的 83 是动作发生在原素材中的显示帧号，从零开始计数。用本镜 `visual` 原件逐帧找接触，再试听所选录音，填入录音里选定接触峰的秒数 `anchor`。
+
+```json
+[{"shot":"latch","at":{"source_frame":83},"key":"dial-629301","trim":[0.3,0.8],"anchor":0.378,"peak_db":-18,"pan":0,"event":"扣件接触"}]
+```
+
+配乐和拟音都支持 `at` 或原有的 `offset`。词锚与画面动效共用准备后的词钟，同一句第二次说到同一词时用 `@lock:锁住#2`。`prepare.py` 会为配乐和拟音计划引用的台词生成词钟，逐字发声时间以本次录音或人工校准的 `word_times` 为准。用 `shift_frames` 以成片帧为单位前移或后移。先让锚点落在标注镜号内，再调整预告或余响。源帧按媒体显示时间映射，可处理可变帧率。重录、调镜长或改变入点后运行 `prepare.py`，正式导出与局部修音都会按当下的计划重算。已经混好的效果分轨沿用 `effects`；同一工程在 `effects` 与 `sfx_plan` 中选一项。候选片的 `technical.json` 在 `sfx_cues` 记下实际命中采样、取用的声音片段及素材来源。
+
+### 从上一个镜头听到下一个现场
+
+普通实拍镜头可直接保留原文件的第一条音轨。在需要的 shot 中设置 `location_sound`。例如本镜画面取自原片 6.0 至 8.0 秒，手伸进抽屉前先听见滑轨声，切到物件特写后再听完余振。
+
+```json
+{"id":"drawer","visual":"assets/drawer.mov","in":6.0,
+ "location_sound":{"source_range":[5.8,8.3],"gain_db":-6,"fade_in":0.04,"fade_out":0.16}}
+```
+
+`source_range` 的起止值和画面 `in` 都以原媒体开头为零点。这里声音先于切入 0.2 秒，晚于切出 0.3 秒。用相邻画面真实可用的余量安排 J-cut / L-cut；片头、片尾以及原轨末尾要容得下完整范围。淡入淡出的单位是秒。遇到交叠的环境声，在同一音量下听前后两个空间的距离和底噪，再调增益与渐变长度。导出保留原件校验值、取用的原声采样区间及落在成片的区间，可据此复听接缝。
+
 ## 签发时写什么
 
 `editorial_review.py status` 列出候选片的 `missing_perception`。常规导出从实际 music/effects 和 screen-plan.json 推导应检项；自定义项目可以在 edit.json 用 `perception_checks` 明确要求 music、effects 或 motion。每类用实看片段填写，不套用其他片的数值。例：

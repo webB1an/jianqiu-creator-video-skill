@@ -5,7 +5,7 @@ import re
 import shlex
 
 from production_run import digest
-from remotion_library import LIBRARY, SKILL, catalog, engine_files, resolve_frame, safe_path
+from remotion_library import LIBRARY, SKILL, catalog, engine_files, placement_record, project_params, safe_path
 from remotion_source_usage import media_usage
 
 
@@ -24,12 +24,12 @@ def read_receipt(shot, timing, edit, timeline, project, read_path, pins=None):
                 or receipt.get('effect', entry['id']) != entry['id']):
             raise ValueError('Receipt does not match this effect or the prepared timeline')
 
-        params = dict(settings.get('params', {}))
-        for key, anchor in settings.get('cues', {}).items():
-            params[key] = resolve_frame(anchor, timeline, timing)
+        params = project_params(shot, timeline, timing)
+        if "placement" in settings and receipt.get("placement") != placement_record(settings, params):
+            raise ValueError("Recorded lower-third interval differs from the current picture reservations")
         spec = dict(params=params, width=edit.get('size', [1920, 1080])[0],
                     frames=timing['frames'], fps=timeline['fps'])
-        engine = set(engine_files(entry))
+        engine = set(engine_files(entry, placement="placement" in settings))
         inputs = {'edit.json', 'timeline.json'}
         used = []
         media = [(key, params.get(key)) for key in entry.get('media', [])]

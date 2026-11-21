@@ -5,6 +5,7 @@ import math
 from pathlib import Path
 import re
 
+from music_direction import has_effects
 from picture_roughcut import probe
 from production_run import digest
 
@@ -66,6 +67,8 @@ def project_scope(edit_path):
         return {}
     edit = json.loads(edit_path.read_text())
     checks = {kind: [] for kind in ('music','effects') if edit.get(kind) and edit.get(kind+'_gain', 1) != 0}
+    if has_effects(edit):
+        checks.setdefault('effects', [])
     for kind in expected_audio(edit):
         checks.setdefault(kind, [])
     if edit.get('caption_style') or any(shot.get('lines') for shot in edit.get('shots', [])):

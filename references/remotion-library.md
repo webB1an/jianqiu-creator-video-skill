@@ -57,6 +57,28 @@ PY="$HOME/.cache/creator-video-env/bin/python"
 "$PY" "$SK/scripts/export.py"
 ```
 
+同一镜有多个信息层时，可以把词锚直接给到某一层。例如原句分段划亮的 `params.segments` 已有两段，可在 `remotion_effect.cues` 写 `{"segments[0].at":"@quote:原价","segments[0].until":"@quote:实付","segments[1].at":"@quote:实付"}`。观众听到“实付”时视线才从原价交给实付，第二处停稳供阅读。局部聚光可以给多处证据设置独立的抵达词和停读词，完整的 `stops` 配置见[静态原件的逐词取景示例](picture-edit.md#让静态素材跟得上旁白)。人物身份条可把 `startFrame` 和 `endFrame` 绑定到介绍与让出画面的词。结束帧为首个隐藏帧。换录音后重新 prepare 并渲染该镜，按实读落点核对交接。
+
+### 把身份条排在证据读完后的空档
+
+当人物介绍可以稍晚出现时，先把原件上要保护的读数或出处按出现时段登记在镜头的 `caption_avoid`。在同一镜的 `remotion_effect` 增加 `placement`。用预览确认身份条从滑入到停稳占用的总范围，将这个框填入 `box`，四个数依次是画面宽高归一化的左、上、右、下边界。姓名、职务、字号或取景变动后重新核对这个框。实拍底片填在 `remotion_effect.background`，保持 `params.background` 透明，读数在身份条让开时仍能看到。
+
+```json
+{
+  "id":"engineer","visual":"visuals/engineer.mp4",
+  "caption_avoid":[{"label":"压力与单位","frames":[12,42],"box":[0.10,0.61,0.30,0.72]}],
+  "remotion_effect":{
+    "effect":"lower-third","background":"assets/interview.mp4",
+    "params":{"name":"陈川","role":"值班工程师","startFrame":8,"endFrame":96},
+    "placement":{"duration_frames":36,"box":[0.035,0.57,0.36,0.77]}
+  }
+}
+```
+
+启用自动避让时，`startFrame`、`endFrame` 给出允许出场的镜内窗口，也可用上文的实读词锚来定。省略两端时取整镜。`duration_frames` 是完整连续显示时长，包含入场动画。上例要求在 [8,96) 中找到 36 帧，F12–41 同处要读仪表，所以身份条排在 [42,78)。画面其他位置的保护区可以同时展示。窗口不足会报出涉及时段和对象，由剪辑调整可用窗口、显示时长或构图。
+
+实际占位写入镜头收据的 `placement.frames` 和 `placement.box`。横版主字幕依选定时段与此框逐句避让。竖版另按重构后的实际位置在竖版计划登记，带定位样式的外部字幕和手动指定的字幕位置延续各自排版。独立网页预览可把收据中的两端填回 `params.startFrame`、`params.endFrame` 逐帧看交接。
+
 正式镜头旁生成 `<visual>.remotion.json`，记录使用的原件、时间区间、模板版本信息和画面摘要。原件变动后重渲对应镜头；分镜或实读时间轴变动后，重新准备并重渲受收据绑定影响的模板镜头。全片导出会检查当前画面与收据，接入原有调色、配音、字幕与署名流程。
 
 ## 在本期工程调整组件

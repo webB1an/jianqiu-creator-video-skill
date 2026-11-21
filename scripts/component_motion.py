@@ -1,5 +1,6 @@
 """Measure the independently staged regions of an encoded shot on its edit clock."""
 import argparse
+from contextlib import closing
 import json
 import math
 import subprocess
@@ -89,11 +90,14 @@ def probes_from_plan(plan, frames):
     return probes
 
 
-def decode(media):
+def decode_proxy(media, sampling, limit=None):
     size = WIDTH * HEIGHT
     command = ['ffmpeg', '-v', 'error', '-threads', '2', '-i', str(media), '-map', '0:v:0',
-               '-an', '-vf', f'fps={SAMPLE_FPS},scale={WIDTH}:{HEIGHT}:flags=area,format=gray',
-               '-f', 'rawvideo', '-threads', '1', 'pipe:1']
+               '-an', '-vf', f'{sampling},scale={WIDTH}:{HEIGHT}:flags=area,format=gray',
+               '-fps_mode', 'passthrough']
+    if limit is not None:
+        command.extend(['-frames:v', str(limit)])
+    command.extend(['-f', 'rawvideo', '-threads', '1', 'pipe:1'])
     import numpy as np
     with subprocess.Popen(command, stdout=subprocess.PIPE) as process:
         try:
@@ -108,6 +112,10 @@ def decode(media):
             process.stdout.close()
     if process.returncode:
         raise ValueError(f'Decoder failed on {media}')
+
+
+def decode(media):
+    yield from decode_proxy(media, f'fps={SAMPLE_FPS}')
 
 
 def resembles_blend(samples):
@@ -138,7 +146,11 @@ def resembles_blend(samples):
 
 def visible_delta(current, previous, crop, thin=False):
     import numpy as np
-    delta = np.abs(current[crop]-previous[crop])
+    return changed_area(np.abs(current[crop]-previous[crop]), thin)
+
+
+def changed_area(delta, thin):
+    import numpy as np
     if np.mean(delta >= 9) >= .0025:
         return True
     if not thin:
@@ -205,6 +217,9 @@ def measure_samples(samples, probes, fps):
                  active_share=round(len(marks)/n, 3) if n else None,
                  longest_quiet_seconds=round(max(y-x for x, y in zip(times, times[1:])), 3),
                  first_change=marks[0] if marks else None, last_change=marks[-1] if marks else None)
+        p['quiet_spans'] = [dict(start_frame=p['start'] + round(lo*fps),
+                                 end_frame=min(p['end'], p['start'] + round(hi*fps)))
+                            for lo, hi in zip(times, times[1:]) if hi-lo >= 2.5]
         p['review_hold'] = duration >= 4 and (len(marks) < 4 or p['longest_quiet_seconds'] >= max(3., duration*.72))
         if 'mode' in p:
             hints = []
@@ -232,7 +247,64 @@ def measure_samples(samples, probes, fps):
 
 
 def inspect(media, probes, fps):
-    return measure_samples(decode(media), probes, fps) if probes else []
+    rows = measure_samples(decode(media), probes, fps) if probes else []
+    # Preserve the historical 8 Hz scores. Spoken-hold review needs exact interval boundaries.
+    eligible = [p for p in rows if p.get('authored') and p['end'] - p['start'] >= 2.5 * fps]
+    if eligible:
+        measure_native_holds(media, eligible, fps)
+    return rows
+
+
+def measure_native_holds(media, rows, fps):
+    """Stream every encoded frame in the union of authored subject windows."""
+    import numpy as np
+    starts = {}
+    windows = []
+    for row in sorted(rows, key=lambda p: p['start']):
+        a, b = row['start'], row['end']
+        row['quiet_spans'] = []
+        state = dict(row=row, crop=bounds(row['roi']), thin=row.get('mode') in {'trace', 'readout'})
+        starts.setdefault(a, []).append(state)
+        if windows and a <= windows[-1][1]:
+            windows[-1][1] = max(windows[-1][1], b)
+        else:
+            windows.append([a, b])
+    selection = '+'.join(f'between(n,{a},{b-1})' for a, b in windows)
+    minimum = math.ceil(2.5 * fps)
+
+    def end_hold(state, stop):
+        if stop - state['first'] >= minimum:
+            state['row']['quiet_spans'].append(dict(start_frame=state['first'], end_frame=stop))
+
+    selected_frames = sum(b - a for a, b in windows)
+    with closing(decode_proxy(media, f"select='{selection}'", selected_frames)) as images:
+        for a, b in windows:
+            active = []
+            previous = None
+            for n in range(a, b):
+                raw = next(images, None)
+                if raw is None:
+                    raise ValueError(f'Encoded picture ended before motion ROI frame {n}')
+                image = raw.astype(np.int16)
+                active.extend(starts.get(n, ()))
+                for state in active:
+                    row, crop = state['row'], state['crop']
+                    area = image[crop]
+                    if n == row['start']:
+                        state.update(first=n, anchor=area.copy())
+                    elif (visible_delta(image, previous, crop, state['thin'])
+                          or changed_area(np.abs(area - state['anchor']), state['thin'])):
+                        # A brief action and its return both split the run. A settled anchor also
+                        # catches gradual movement whose individual steps are below the noise floor.
+                        end_hold(state, n)
+                        state.update(first=n, anchor=area.copy())
+                    if n + 1 == row['end']:
+                        end_hold(state, n + 1)
+                        del state['anchor']
+                active = [state for state in active if state['row']['end'] > n + 1]
+                previous = image
+        if next(images, None) is not None:
+            raise ValueError('Unexpected extra frames in motion ROI decode')
 
 
 def main():

@@ -45,11 +45,15 @@ def render_minutes(ledger, path):
         if record.get('story_intent'):
             intent = record['story_intent']
             paragraphs.append(f"本片希望观众明白「{intent['main_point']}」，看完能带走「{intent['viewer_value']}」。")
-            for entry in record.get('first_views', {}).values():
+            for viewer, entry in record.get('first_views', {}).items():
                 response = entry['response']
                 paragraphs.append(f"**{response['reviewer']} 的原话**　主旨「{response['main_point']}」。"
                                   f"收获或感受「{response['viewer_value']}」。注意力「{response['attention']}」。"
                                   f"观看方式 {response['method']}，限制 {response['limits']}。")
+                if viewer in record.get('transfer_answers', {}):
+                    task = intent['transfer_task']
+                    paragraphs.append(f"首看后的追问「{task['question']}」　{response['reviewer']} 回答"
+                                      f"「{record['transfer_answers'][viewer]}」。")
         meeting = record.get('meeting')
         if meeting:
             paragraphs.append('### 会审')
@@ -60,6 +64,9 @@ def render_minutes(ledger, path):
                 attention = '保留' if finding['attention'] == 'keep' else '返修'
                 paragraphs.append(f"主编对照 {finding['reviewer']} 的首看：主旨{grades[finding['main_point']]}，"
                                   f"观众收获{grades[finding['viewer_value']]}，吸引力判断为{attention}。{finding['basis']}")
+                if 'transfer' in finding and record.get('story_intent', {}).get('transfer_task'):
+                    criterion = record['story_intent']['transfer_task']['criterion']
+                    paragraphs.append(f"对照新例题的判据「{criterion}」，回答{grades[finding['transfer']]}。")
             for row in meeting['tickets']:
                 disposition = '安排修改' if row['action'] == 'fix' else '保留现状'
                 paragraphs.append(f"**{row['id']} · {disposition}**　{row['reason']}")

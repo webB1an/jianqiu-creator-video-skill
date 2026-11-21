@@ -391,7 +391,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
     subs = parser.add_subparsers(dest="command", required=True)
-    for command in ("begin", "first-view", "observe", "supplement", "discuss", "check", "decide", "verify", "publish", "status"):
+    for command in ("begin", "first-view", "transfer", "observe", "supplement", "discuss", "check", "decide", "verify", "publish", "status"):
         sub = subs.add_parser(command)
         sub.add_argument("media", type=Path)
         if command == "first-view":
@@ -399,7 +399,7 @@ def main():
         if command == "begin":
             sub.add_argument("--from", dest="parent", metavar="PARENT_SHA256")
             sub.add_argument("--patch", type=Path, help="Verified fixed-window edit report for this candidate")
-        if command in ("observe", "supplement", "discuss", "check", "decide"):
+        if command in ("transfer", "observe", "supplement", "discuss", "check", "decide"):
             sub.add_argument("report", type=Path, help="JSON object bound to candidate_sha256")
         if command == "publish":
             sub.add_argument("--output", type=Path, default=Path("out/final.mp4"))
@@ -441,7 +441,8 @@ def main():
             if args.command == "decide":
                 decide(record, data, args.media)
             else:
-                {"observe": observe, "supplement": supplement, "discuss": discuss, "check": check_fix}[args.command](record, data)
+                {"transfer": story_review.record_transfer, "observe": observe, "supplement": supplement,
+                 "discuss": discuss, "check": check_fix}[args.command](record, data)
         legacy_motion = args.command == "verify" and not (record["decision"] or {}).get("motion_window_evidence_version")
         if args.command in ("publish", "verify"):
             decision = record["decision"] or {}

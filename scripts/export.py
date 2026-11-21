@@ -17,7 +17,7 @@ import explainer_scene_receipt
 import remotion_effect_receipt
 from floating_captions import caption_input, top_caption_ranges
 from perception_review import expected_audio
-from music_direction import RATE, mix_stems, normalization_filter, resolve_cues
+from music_direction import RATE, has_effects, mix_stems, normalization_filter, resolve_cues
 from covers import SIZES, run as render_covers
 from PIL import Image
 from transitions import STILLS, plan_bridges, source_handles, stitch
@@ -42,6 +42,8 @@ def levels(path):
 
 def check_audio_request(edit):
     for key in expected_audio(edit):
+        if key == 'effects' and has_effects(edit):
+            continue
         if not edit.get(key) or edit.get(key+'_gain',1) == 0:
             raise ValueError(f'{key} was requested for this cut. Supply the stem and a nonzero mix gain.')
 
@@ -54,7 +56,7 @@ def render_frames(folder, edit, timeline, prepared_covers, captions, pins, statu
     if timeline.get('edit_sha256') != pins.hashes['edit.json']:
         raise ValueError('edit.json changed. Re-run prepare.py and rebuild dependent shots and audio.')
     if [s['id'] for s in edit['shots']]!=[s['id'] for s in timeline['shots']]:raise ValueError('Re-run prepare.py after editing shots')
-    music_cues = resolve_cues(edit, timeline)
+    music_cues = resolve_cues(edit, timeline, pin=pins.pin)
     cut_frames = {s['start_frame'] for s in timeline['shots']}
     plan = pins.pin(edit.get('screen_plan') or 'screen-plan.json', optional=not edit.get('screen_plan'))
     pins.pin('library-uses.json', optional=True)
@@ -74,12 +76,17 @@ def render_frames(folder, edit, timeline, prepared_covers, captions, pins, statu
     encoder = subprocess.check_output(['ffmpeg','-version'], text=True).splitlines()[0]
     cache = WORK/'shots'
     cache.mkdir(exist_ok=True)
-    edges = plan_bridges(edit['shots'], timeline['shots'], fps)
+    transition_adjustments = []
+    edges = plan_bridges(edit['shots'], timeline['shots'], fps,
+                         default_handles=edit.get('transition_handles', 'hold'), source_path=pins.pin,
+                         decisions=transition_adjustments)
     remotion_receipts = {}
     for index,(shot,timing) in enumerate(zip(edit['shots'],timeline['shots'])):
         if 'remotion_effect' in shot:
             remotion_receipts[shot['id']] = remotion_effect_receipt.read_receipt(
                 shot, timing, edit, timeline, Path.cwd(), pins.pin, pins)
+        if 'roughcut_source_sha256' in shot:
+            pins.expect(shot['visual'], shot['roughcut_source_sha256'])
         path=pins.pin(shot['visual'])
         if 'explainer_scene' in shot:
             explainer_scene_receipt.verify(shot, timing, fps, pins)
@@ -115,15 +122,23 @@ def render_frames(folder, edit, timeline, prepared_covers, captions, pins, statu
             color_sources[shot['id']]['icc_to_srgb'] = profile
         if not pic and float(source['format']['duration'])-seek+1/fps < render_frames_count/fps:
             raise ValueError(f'{path.name} is too short for {render_frames_count/fps:.2f}s from {seek:.3f}s including transition handles')
+        sample_clock = f'fps={fps}'
+        if not pic and 'roughcut_source_sha256' in shot:
+            from roughcut_adoption import picture_sample_clock
+            seek, sample_clock = picture_sample_clock(seek, fps, shot.get('roughcut_clock_in', shot.get('in', 0)))
         inputs=['-loop','1','-framerate',fps] if pic else ['-ss',seek]
         if shot.get('crop') is not None:
             vf = crop_filter(shot['crop'], video_info, [w,h])
+        elif 'roughcut_source_sha256' in shot:
+            # Match the rough cut's display aspect and use the original raster for delivery.
+            vf = (f"scale=w='max(2,trunc(min({w},{h}*dar)/2)*2)':"
+                  f"h='max(2,trunc(min({h},{w}/dar)/2)*2)',setsar=1,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2")
         elif shot.get('fit','contain')=='cover':
             vf=f'scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}'
         else:
             vf=f'scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2'
         name=f'shot{index:04}.mp4'
-        base_filter = f'fps={fps},{color},{vf},setsar=1'
+        base_filter = f'{sample_clock},{color},{vf},setsar=1'
         video_args = ['-frames:v',render_frames_count,'-c:v','libx264','-preset','veryfast','-crf',16,*color_finish.FLAGS]
         encode = ['-map',video_map,'-an','-vf',base_filter + ',format=yuv420p',*video_args]
         recipe = [encoder, pins.hashes[pins.key(shot['visual'])], inputs, encode]
@@ -170,7 +185,8 @@ def render_frames(folder, edit, timeline, prepared_covers, captions, pins, statu
     bridges=stitch(folder,edit['shots'],timeline['shots'],fps,ff,probe,edges=edges,
                    source_path=pins.pin,windows_receipt=windows)
     duration=timeline['frames']/fps
-    mix = mix_stems(ff, folder, edit, timeline, pins.pin, music_cues)
+    audio_report = {}
+    mix = mix_stems(ff, folder, edit, timeline, pins.pin, music_cues, audio_report=audio_report)
     measured=levels(mix)
     samples = timeline['frames'] * RATE // fps
     # Dynamic loudnorm can return contiguous PCM with a discontinuity in its timestamps.
@@ -180,7 +196,7 @@ def render_frames(folder, edit, timeline, prepared_covers, captions, pins, statu
     shutil.copyfile(captions,folder/'captions.srt')
     master=folder/'master.mp4'
     brand_image(w,h,folder/'mark.png')
-    top_ranges=top_caption_ranges(edit,timeline,0,timeline['frames'])
+    top_ranges=top_caption_ranges(edit,timeline,0,timeline['frames'], srt=folder/'captions.srt', size=(w,h))
     caption_args=caption_input(folder,folder/'captions.srt',w,h,fps,timeline['frames'],
                                style=edit.get('caption_style','plate'),font=edit.get('font','Heiti SC'),top_ranges=top_ranges)
     pin_args, pin_layers = montage_pins.inputs(
@@ -199,6 +215,9 @@ def render_frames(folder, edit, timeline, prepared_covers, captions, pins, statu
     qa=dict(frames=int(v['nb_frames']),duration=duration,size=[w,h],fps=fps,video=v['codec_name'],audio=a['codec_name'],channels=a['channels'],LUFS=float(actual['input_i']),dBTP=float(actual['input_tp']),decoded=True,transitions=bridges,black_intervals=black_intervals)
     if windows:
         qa['evidence_windows'] = windows
+    if transition_adjustments:
+        qa['transition_adjustments'] = transition_adjustments
+    qa.update(audio_report)
     qa['audio_samples'] = int(encoded_samples)
     qa['mix_normalization'] = measured
     if music_cues:

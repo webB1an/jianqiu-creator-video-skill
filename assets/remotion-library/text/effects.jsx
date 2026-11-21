@@ -58,8 +58,14 @@ export function LowerThird({params, width, height, fps, frames}) {
   const frame = useCurrentFrame();
   const colors = theme(params);
   const {unit, margin, style} = stage(width, height, colors);
-  const end = Math.min(frames - 1, Math.round(fps * 0.62));
-  const amount = end < 2 || frame >= end ? 1 : spring({frame, fps, durationInFrames: end,
+  const start = params.startFrame ?? 0;
+  const stop = params.endFrame ?? frames;
+  if (!Number.isInteger(start) || !Number.isInteger(stop) || start < 0 || start >= stop || stop > frames) {
+    throw new Error('身份条需要有效的镜内区间 [startFrame, endFrame)');
+  }
+  const local = frame - start;
+  const end = Math.min(stop - start - 1, Math.round(fps * 0.62));
+  const amount = local < 0 || frame >= stop ? 0 : end < 2 || local >= end ? 1 : spring({frame: local, fps, durationInFrames: end,
     config: {mass: 1, damping: 28, stiffness: 160, overshootClamping: true}});
   const name = requiredText(params.name, 'name');
   return <AbsoluteFill style={{...style, background: params.background ?? 'transparent'}}>
@@ -68,7 +74,7 @@ export function LowerThird({params, width, height, fps, frames}) {
       padding: `${15 * unit}px ${26 * unit}px`, opacity: amount, transform: `translateX(${(amount - 1) * 62 * unit}px)`}}>
       <div style={{fontSize: 47 * unit, fontWeight: 700, lineHeight: 1.18}}>{name}</div>
       {params.role && <div style={{marginTop: 7 * unit, color: colors.muted, fontSize: 24 * unit, lineHeight: 1.3,
-        opacity: progress(frame, end * 0.34, end)}}>{params.role}</div>}
+        opacity: progress(local, end * 0.34, end)}}>{params.role}</div>}
     </div>
   </AbsoluteFill>;
 }
@@ -83,6 +89,9 @@ export function TextHighlight({params, width, height, fps, frames}) {
     if (!part || typeof part !== 'object') throw new Error('高亮片段需要 text 和 at');
     requiredText(part.text, 'segment.text');
     if (!Number.isInteger(part.at) || part.at < 0 || part.at >= frames) throw new Error('segment.at 需在本镜帧范围内');
+    if (part.until !== undefined && (!Number.isInteger(part.until) || part.until < part.at || part.until >= frames)) {
+      throw new Error('segment.until 须位于 at 和本镜末帧之间');
+    }
     return part;
   });
   if (!segments.some(s => s.at !== undefined)) throw new Error('至少给一个原句片段设置高亮帧 at');
@@ -90,10 +99,10 @@ export function TextHighlight({params, width, height, fps, frames}) {
   return <AbsoluteFill style={{...style, justifyContent: 'center', padding: `0 ${margin}px ${height * 0.06}px`}}>
     {params.source && <div style={{color: colors.muted, fontSize: 26 * unit, marginBottom: 22 * unit}}>{params.source}</div>}
     <div style={{fontSize: 61 * unit, lineHeight: 1.65, fontFamily: serif, fontWeight: 600}}>
-      {segments.map(({text, at}, index) => at === undefined ? <React.Fragment key={index}>{text}</React.Fragment> :
+      {segments.map(({text, at, until}, index) => at === undefined ? <React.Fragment key={index}>{text}</React.Fragment> :
         <span key={index} style={{backgroundImage: `linear-gradient(${colors.accent}, ${colors.accent})`,
           backgroundRepeat: 'no-repeat', backgroundPosition: 'left 94%', WebkitBoxDecorationBreak: 'clone',
-          boxDecorationBreak: 'clone', backgroundSize: `${progress(frame, at, Math.min(frames - 1, at + stroke)) * 100}% 0.085em`}}>{text}</span>)}
+          boxDecorationBreak: 'clone', backgroundSize: `${progress(frame, at, until ?? Math.min(frames - 1, at + stroke)) * 100}% 0.085em`}}>{text}</span>)}
     </div>
   </AbsoluteFill>;
 }

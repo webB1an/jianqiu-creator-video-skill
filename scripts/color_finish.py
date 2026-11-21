@@ -94,14 +94,45 @@ def source_filter(info, overrides=None, *, raster_size=None):
     return filters, report
 
 
+def balance_gains(balance):
+    """Map a measured neutral patch to the reference chromaticity while keeping patch luminance."""
+    if not isinstance(balance, dict) or set(balance) != {'sample', 'reference'}:
+        raise ValueError('grade.white_balance requires sample and reference RGB triples')
+    def linear_triplet(value):
+        if (not isinstance(value, list) or len(value) != 3
+                or any(type(v) not in (int, float) or not math.isfinite(v) or not 0 < v < 255 for v in value)):
+            raise ValueError('Measure an unclipped neutral patch in full-range Rec.709 RGB codes (0 < value < 255)')
+        x = [v / 255 for v in value]
+        return [v/4.5 if v < .081 else ((v+.099)/1.099)**(1/.45) for v in x]
+    sample = linear_triplet(balance['sample'])
+    target = linear_triplet(balance['reference'])
+    weights = (.2126, .7152, .0722)
+    source_y = sum(k*v for k, v in zip(weights,sample))
+    target_y = sum(k*v for k, v in zip(weights,target))
+    return [b/a * source_y/target_y for a,b in zip(sample,target)]
+
+
+def balance_filter(gains):
+    # The input is already normalised to Rec.709. Work in full-range RGB with the 709 transfer pair.
+    curves = []
+    for channel, gain in zip('rgb', gains):
+        forward = 'if(lt(val/maxval,0.081),val/maxval/4.5,pow((val/maxval+0.099)/1.099,1/0.45))'
+        encoded = 'if(lt(ld(0),0.018),4.5*ld(0),1.099*pow(ld(0),0.45)-0.099)'
+        curves.append(f"{channel}='st(0,min(1,{gain:.12g}*{forward}));round(maxval*{encoded})'")
+    return ('scale=in_color_matrix=bt709:in_range=tv:out_range=pc,format=gbrp16le,lutrgb='
+            + ':'.join(curves)
+            + ',scale=out_color_matrix=bt709:in_range=pc:out_range=tv,format=yuv444p10le')
+
+
 def graded_source_filter(info, overrides=None, grade=None, *, raster_size=None):
     """Match SDR picture before compositing graphic layers, using 10-bit video-range codes."""
     filters, report = source_filter(info, overrides, raster_size=raster_size)
     if grade is None:
         return filters, report
-    if not isinstance(grade, dict) or set(grade) - {'contrast', 'gamma', 'saturation'}:
-        raise ValueError('grade accepts contrast, gamma and saturation')
-    for key, value in grade.items():
+    if not isinstance(grade, dict) or set(grade) - {'contrast', 'gamma', 'saturation', 'white_balance'}:
+        raise ValueError('grade accepts contrast, gamma, saturation and white_balance')
+    for key in ('gamma', 'contrast', 'saturation'):
+        value = grade.get(key, 1)
         if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
             raise ValueError(f'grade.{key} must be a finite nonnegative number')
     gamma = grade.get('gamma', 1)
@@ -110,6 +141,11 @@ def graded_source_filter(info, overrides=None, grade=None, *, raster_size=None):
     contrast = grade.get('contrast', 1)
     saturation = grade.get('saturation', 1)
     report['grade'] = dict(grade)
+    if 'white_balance' in grade:
+        gains = balance_gains(grade['white_balance'])
+        report['white_balance_linear_gains'] = gains
+        if any(abs(v-1) > 1e-10 for v in gains):
+            filters += ',' + balance_filter(gains)
     planes = []
     if gamma != 1 or contrast != 1:
         # Gamma preserves reference black and white. Contrast pivots around half signal.

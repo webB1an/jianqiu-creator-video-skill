@@ -64,6 +64,8 @@ def used_inputs(edit, timeline):
     for key in ('music', 'effects'):
         if edit.get(key) and float(edit.get(key + '_gain', 1)) != 0:
             result.append(dict(file=edit[key], role=key, range=[0, duration]))
+    from location_sound import location_sources
+    result.extend(location_sources(edit, timeline))
     # A prepared take is played in full. Legacy edits retain their line.audio entry points.
     takes = timeline.get('voice_takes')
     if takes is not None:
@@ -122,6 +124,9 @@ def collect(edit_path, timeline, *, pin=None, visual_cards=(), remotion_receipts
         raise ValueError('Credit timeline belongs to a different edit; prepare again')
     uses = json.loads(read_path(log).read_text())
     inputs = used_inputs(edit, timeline)
+    if edit.get('sfx_plan'):
+        from soundmix import planned_effect_sources
+        inputs.extend(planned_effect_sources(edit, project, read_path))
     for shot, timing in zip(edit['shots'], timeline['shots']):
         if 'explainer_scene' in shot:
             inputs.extend(explainer_scene_receipt.sources(shot,timing,timeline['fps'],project,read_path))

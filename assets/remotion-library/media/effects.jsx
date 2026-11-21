@@ -110,16 +110,38 @@ export function ParallaxPan({params, width, height, frames}) {
   </AbsoluteFill>;
 }
 
+function spotlightPosition(params, frames, frame) {
+  let t, from, to;
+  if (params.stops === undefined) {
+    t = progress(frame, frames, params, 0.75);
+    from = [...point(params.fromFocus ?? [0.33, 0.5], 'fromFocus'), bounded(params.fromRadius ?? .46, 'fromRadius', .025, 1.5)];
+    to = [...point(params.toFocus ?? [0.65, 0.5], 'toFocus'), bounded(params.toRadius ?? .19, 'toRadius', .025, 1.5)];
+  } else {
+    if (!Array.isArray(params.stops) || params.stops.length < 2) throw new Error('至少指定两个需要观察的位置');
+    let previousHold = -1;
+    const stops = params.stops.map((stop, i) => {
+      const at = stop.at;
+      const holdUntil = stop.holdUntil ?? at;
+      if (!Number.isInteger(at) || !Number.isInteger(holdUntil) || (i === 0 && at !== 0) ||
+          at <= previousHold || holdUntil < at || holdUntil >= frames) {
+        throw new Error('首个位置从第 0 帧开始，各停读结束后才移动到下一处，各落点都应在本镜内');
+      }
+      previousHold = holdUntil;
+      return {at, holdUntil, pose: [...point(stop.focus, 'stop.focus'), bounded(stop.radius ?? .19, 'stop.radius', .025, 1.5)]};
+    });
+    const next = stops.findIndex(stop => frame < stop.at);
+    if (next === -1) return stops[stops.length - 1].pose;
+    const left = stops[next - 1], right = stops[next];
+    t = progress(frame, frames, {startFrame: left.holdUntil, endFrame: right.at}, 1);
+    from = left.pose;
+    to = right.pose;
+  }
+  return from.map((v, i) => interpolate(t, [0, 1], [v, to[i]]));
+}
+
 export function SpotlightReveal({params, width, height, frames}) {
-  const t = progress(useCurrentFrame(), frames, params, 0.75);
-  const from = point(params.fromFocus ?? [0.33, 0.5], 'fromFocus');
-  const to = point(params.toFocus ?? [0.65, 0.5], 'toFocus');
-  const radius = interpolate(t, [0, 1], [
-    bounded(params.fromRadius ?? 0.46, 'fromRadius', 0.025, 1.5),
-    bounded(params.toRadius ?? 0.19, 'toRadius', 0.025, 1.5),
-  ]) * Math.min(width, height);
-  const x = interpolate(t, [0, 1], [from[0], to[0]]) * width;
-  const y = interpolate(t, [0, 1], [from[1], to[1]]) * height;
+  const [cx, cy, size] = spotlightPosition(params, frames, useCurrentFrame());
+  const x = cx * width, y = cy * height, radius = size * Math.min(width, height);
   const feather = bounded(params.feather ?? 0.22, 'feather', 0, 0.95);
   const dim = bounded(params.dim ?? 0.70, 'dim', 0, 0.92);
   const shade = `radial-gradient(circle at ${x}px ${y}px, transparent ${radius * (1 - feather)}px, rgba(0,0,0,${dim}) ${radius}px)`;

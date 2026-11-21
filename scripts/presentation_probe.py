@@ -31,7 +31,8 @@ def report(video,folder,clean=None,srt=None,project=None):
         timeline = json.loads((project/'timeline.json').read_text())
         if timeline['frames'] != total or timeline['fps'] != fps:
             raise ValueError('Select the project matching the full video timeline')
-        upper = top_caption_ranges(json.loads((project/'edit.json').read_text()),timeline,0,total)
+        upper = top_caption_ranges(json.loads((project/'edit.json').read_text()), timeline, 0, total,
+                                   srt=srt or project/'audio/captions.srt', size=(w, h))
     def at_top(frame):
         return any(lo <= frame < hi for lo,hi in upper)
     pw=384

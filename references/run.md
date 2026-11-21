@@ -55,7 +55,26 @@ archive-video 在 Internet Archive 搜索标有开放许可的实拍或档案视
 
 上例第一版在全片 F48 进入 field 镜，第二版在 F56 进入，总长仍为 78 帧。前镜多播八帧，后镜少播八帧。后镜用视频时，它的源入点也顺延 8/30 秒，后面的动作依然对齐同一句话；用静帧时直接调整停留。负数表示提前，入镜视频需有真实前余量，两镜均至少保留一帧。两版共享同一次编码的音轨，收据记录源 WAV、AAC 内容校验值和切点偏移。只给 `--audio` 可直接预览单版。
 
-原速从上一镜听过切点，比较第一眼能读出结果的时刻和当时的声音。选定后打开 `receipt.json` 的 `versions.first.cuts` 或 `versions.alternate.cuts`，按镜号取 `start/end`（粗剪帧）和视频 `in/out`（源秒）。将这些窗口写进正片实际剪画面用的轨道或镜头生成器，声音沿用同一节目时基；取了中段的粗剪要加回它的节目起帧。程序按旁白长度切镜的项目，可以把这两个画面连剪为原有台词上的连续底片，再按现有各镜时长从它取画。同步更新正式分镜的切点和观察窗，导出后对一遍结果首帧与原句。
+原速从上一镜听过切点，比较观众第一眼能读出结果的帧和当时听到的词。已有实录或配音时，先用 `prepare.py` 建好节目时钟。把本段粗剪总帧数对到要替换的连续一组正式镜号，首尾对齐。可在这组镜号间插入新的纯画面镜号，一句原声可跨数镜。全片重排时也保留原有台词镜号，以便找到相应录音。有声与无声版本都从工程目录用同一命令采纳。
+
+```sh
+"$PY" "$SK/scripts/prepare.py" --adopt-roughcut qa/field-timing/receipt.json --plan rough-plan.json --version alternate
+"$PY" "$SK/scripts/prepare.py"
+```
+
+第一条把选定镜序、每镜帧数、原件路径、源入点与裁切写回 `edit.json`。第二条按原来的说话顺序重建配音和字幕，并让 `timeline.json.shots` 使用新的画面切点。`narration_sections` 保留各段录音的原时钟。所选段内部采用预览里的直接切，随后可为需要的接点设计转场。在正式分镜同步调整观察窗、字幕避让、音效和按镜定位的提示。例如新切点 F56 将原先从 F48 开始的后镜缩短了八帧。用逐帧查看确认动作最早可辨的一帧仍落在原句旁。采纳会核对粗剪计划、选中代理片和原件的版本，正式导出继续按登记的实拍原件校验。仍在工程中编排的 Remotion 或场景组件从本镜第 0 帧起剪，按命令返回的 `regenerate_after_prepare` 镜号在新时间线上重建。用临时总混或中段 WAV 时，从相应节目起点截取，开声对准一个口播词或现场动作。
+
+**改稿或重新留停顿。** 长句没给观众时间看清时，先改原句、`line.pause` 或连续录音。生成新的整片旁白导轨，再按它与画面重新比较。
+
+```sh
+"$PY" "$SK/scripts/prepare.py" --guide-dir qa/voice-02
+"$PY" "$SK/scripts/screen_plan.py" rough-02.json --roughcut qa/full-02 --audio qa/voice-02/audio/narration.wav
+"$PY" "$SK/scripts/prepare.py" --guide-dir qa/voice-02 --adopt-roughcut qa/full-02/receipt.json --plan rough-02.json --version first
+"$PY" "$SK/scripts/prepare.py"
+```
+
+上例的计划在工程根目录，从 F0 覆盖新导轨的完整帧数，包含原有画面镜号。仅移动一刀且录音没改时，可继续对原来那一段滚剪。采用有声粗剪后，如果重建的配音发生变化，正式准备会要求重新对照该录音。
+
 
 ### 配音与正片
 

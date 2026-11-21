@@ -4,6 +4,8 @@ import io
 import json
 import re
 import subprocess
+import shutil
+import sys
 import tempfile
 from difflib import SequenceMatcher
 from captioning import clean_parts, width, LIMIT, MIN_CUE_SECONDS
@@ -14,6 +16,7 @@ from voice_endings import MODEL_DIR, final_ending_checks
 from narration_pace import sentence_pace
 from picture_rhythm import inspect_rhythm
 from section_pace import measure_sections
+from evidence_frames import cue_frames, readback_report
 from review_bundle import digest, latest, receipt_for, released_snapshot
 
 
@@ -53,15 +56,27 @@ def pacing_review(master, timeline, subs, windows, bridges, folder):
                           captions=[s for a,b,s in subs if a < end/fps and start/fps < b],
                           transitions=None if bridges is None else [b['preset'] for b in bridges
                               if b['first_frame'] < end and start < b['end_frame']]))
-    if notes:
-        picked = sorted({n for row in notes for n in row['sampled_frames']})
+    proofs = []
+    for reading in timeline.get('evidence_readings', []):
+        markers = cue_frames(reading, total)
+        events = []
+        for n, roles in markers.items():
+            events.append(dict(frame=n, roles=roles, captions=[t for a,b,t in subs if a <= n/fps < b],
+                               transitions=None if bridges is None else [b['preset'] for b in bridges
+                                   if b['first_frame'] <= n < b['end_frame']]))
+        proofs.append(dict(shot=reading['shot'], discovery=reading['discovery'], sampled_frames=list(markers),
+                           events=events))
+    sheets = [('watch', i, row) for i,row in enumerate(notes,1)]
+    sheets.extend(('evidence', i, row) for i,row in enumerate(proofs,1))
+    if sheets:
+        picked = sorted({n for _, _, row in sheets for n in row['sampled_frames']})
         expr = '+'.join(f'eq(n\\,{n})' for n in picked)
         with tempfile.TemporaryDirectory(dir=folder) as tmp:
             subprocess.run(['ffmpeg','-v','error','-i',master,'-map','0:v:0','-an','-vf',
                 f"select={expr},scale=390:'max(1,round(390/dar))':flags=lanczos,setsar=1",
                 '-fps_mode','passthrough','-frames:v',str(len(picked)),str(Path(tmp)/'%08d.png')],check=True)
             images = dict(zip(picked, sorted(Path(tmp).glob('*.png')), strict=True))
-            for i, row in enumerate(notes, start=1):
+            for kind, i, row in sheets:
                 samples = row['sampled_frames']
                 with Image.open(images[samples[0]]) as first:
                     sheet = Image.new('RGB', (390*len(samples), first.height+24), '#17221e')
@@ -69,15 +84,19 @@ def pacing_review(master, timeline, subs, windows, bridges, folder):
                     with Image.open(images[n]) as image:
                         sheet.paste(image,(390*col,0))
                     ImageDraw.Draw(sheet).text((390*col+8,sheet.height-19),f'F{n}   {n/fps:.3f}s', fill='white')
-                row['sample_sheet'] = f'watch-{i:02}.png'
+                row['sample_sheet'] = f'{kind}-{i:02}.png'
                 sheet.save(folder/row['sample_sheet'])
-    return dict(shots=edit, viewing_windows=notes)
+    result = dict(shots=edit, viewing_windows=notes)
+    if proofs:
+        result['evidence_frames'] = proofs
+    return result
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--asr',type=Path,help='Local SenseVoice ONNX model directory')
     p.add_argument('--listen-term', action='append', default=[], metavar='TERM',
                    help='Extract mixed-audio examples for this caption term, repeatable without ASR')
+    p.add_argument('--ocr-executable', type=Path, help='Region text reader with the read_screen.swift command/output format')
     p.add_argument('--timeline',type=Path,help='Timeline for standalone or historical media')
     p.add_argument('--media',type=Path,help='Specific candidate or historical master')
     p.add_argument('--sidecars',type=Path,help='Captions and covers directory for standalone media')
@@ -119,7 +138,7 @@ def main():
     manifest = json.loads(receipt.read_text()) if receipt.is_file() else {}
     windows = manifest.get('viewing_windows', [])
     rhythm_cuts = manifest.get('rhythm_cuts', [])
-    if (windows or rhythm_cuts) and (manifest.get('sha256') != digest(master)
+    if (windows or rhythm_cuts or (manifest and tl.get('evidence_readings'))) and (manifest.get('sha256') != digest(master)
                                       or manifest.get('timeline_sha256') not in (None, digest(timeline_path))):
         raise ValueError('Observation windows or rhythm cuts belong to a different timeline or movie')
     technical = master.parent/'technical.json'
@@ -127,6 +146,15 @@ def main():
     if receipt.name == 'bundle.json' and receipt.is_file() and technical.is_file():
         bridges = json.loads(technical.read_text()).get('transitions')
     result['pace'].update(pacing_review(master, tl, subs, windows, bridges, report_dir))
+    if any('readback' in row for row in tl.get('evidence_readings', [])):
+        if args.ocr_executable or (sys.platform == 'darwin' and shutil.which('swiftc')):
+            from check_screen import recognize_images
+            checks = readback_report(master, tl, 390, lambda folder, images: recognize_images(
+                folder, images, binary=args.ocr_executable), proof_dir=report_dir)
+            result['pace']['evidence_readback'] = dict(status='measured', checks=checks)
+        else:
+            result['pace']['evidence_readback'] = dict(status='unavailable', view_width=390,
+                                                        reason='A Vision-compatible OCR executable is required')
     result['pace']['sections'] = measure_sections(tl, rhythm_cuts, subs, windows)
     result['pace']['narration'] = sentence_pace(tl, subs)
     if any('source_clip' in take for take in tl.get('voice_takes', [])):
@@ -138,7 +166,8 @@ def main():
             raise ValueError('Component motion windows belong to a different movie or timeline')
         from component_motion import inspect
         result['component_motion'] = inspect(master, component_windows, fps)
-    result['pace']['picture_rhythm'] = inspect_rhythm(master, tl, bridges, subs)
+    result['pace']['picture_rhythm'] = inspect_rhythm(
+        master, tl, bridges, subs, components=result.get('component_motion', []), windows=windows)
     from covers import SIZES
     thumbs=[]
     for name,size in SIZES.items():

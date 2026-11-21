@@ -76,14 +76,25 @@ def surface_targets(project, edit, timing, overlays):
             row['source'] = source
         result.append(row)
 
+    spoken_sections = {s['id']: (s['start_frame'], s['start_frame'] + s['frames'])
+                       for s in timing.get('narration_sections', [])}
+    spoken_lines = {}
+    if spoken_sections:
+        fps = timing['fps']
+        for take in timing['voice_takes']:
+            rate = take['sample_rate']
+            start = take['start_sample'] * fps // rate
+            end = min(total, (take['end_sample'] * fps + rate - 1) // rate)
+            spoken_lines.setdefault(take['shot'], []).append((start, end))
     for shot in edit.get('shots', []):
         for i, line in enumerate(shot.get('lines', [])):
             text = line['text']
             spoken = line.get('spoken', text)
+            window = spoken_lines[shot['id']][i] if spoken_sections else windows[shot['id']]
             if QUANTITY.search(spoken):
-                add(f"voice/{shot['id']}/{i}", 'narration', spoken, windows[shot['id']])
+                add(f"voice/{shot['id']}/{i}", 'narration', spoken, window)
             if spoken != text and QUANTITY.search(text):
-                add(f"subtitle/{shot['id']}/{i}", 'subtitle', text, windows[shot['id']])
+                add(f"subtitle/{shot['id']}/{i}", 'subtitle', text, window)
     for i, overlay in enumerate(overlays):
         if overlay.get('purpose') in ('measurement', 'evidence') or QUANTITY.search(overlay['text']):
             add(f'overlay/{i}', 'overlay', overlay['text'], (overlay['start'], overlay['end']))
@@ -99,7 +110,8 @@ def surface_targets(project, edit, timing, overlays):
     if not any(t['surface'] == 'cover' for t in result):
         add('cover/artwork', 'cover', '查三种成品封面上的主题、数字、单位及限定词，与片内原始依据逐项比对。', (0, total))
     for claim in edit.get('claims', []):
-        window = windows[claim['shot']] if claim.get('shot') else (0, total)
+        scope = spoken_sections if spoken_sections and claim['surface'] in ('narration', 'subtitle') else windows
+        window = scope[claim['shot']] if claim.get('shot') else (0, total)
         add('claim/' + claim['id'], claim['surface'], claim['text'], window, claim['source'])
     return result
 

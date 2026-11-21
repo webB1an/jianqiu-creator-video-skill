@@ -2,6 +2,8 @@
 from dataclasses import dataclass
 import json
 import math
+import subprocess
+from fractions import Fraction
 from color_finish import FLAGS
 import spatial_bridges
 from pathlib import Path
@@ -9,7 +11,7 @@ from pathlib import Path
 PRESETS = json.loads((Path(__file__).resolve().parents[1]/'assets/motion/transitions.json').read_text())
 
 
-STILLS = {'.jpg', '.jpeg', '.png', '.webp'}
+STILLS = {'.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tif', '.tiff'}
 
 
 @dataclass(frozen=True)
@@ -22,9 +24,66 @@ class Bridge:
     zoom: float | None = None
 
 
-def plan_bridges(shots, times, fps):
+def source_room(shot, frames, fps, source_path, durations):
+    """Available real source frames on either side of the scheduled picture."""
+    path = Path(shot['visual'])
+    if path.suffix.lower() in STILLS:
+        return math.inf, math.inf
+    start = Fraction(str(shot.get('in', 0))) * fps
+    if start < 0:
+        raise ValueError(f"Negative source in-point at {shot['id']}")
+    stream = 'V:0' if shot.get('crop') is not None else 'v:0'
+    key = path, stream
+    if key not in durations:
+        source = str(source_path(path))
+        entries = 'stream=start_pts,duration_ts,time_base,start_time,duration:format=start_time'
+        probe = subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', stream,
+                                         '-show_entries', entries, '-of', 'json', source], text=True)
+        info = json.loads(probe)
+        if not info.get('streams'):
+            raise ValueError(f'No picture stream in {path}')
+        track = info['streams'][0]
+        origin = Fraction(info.get('format', {}).get('start_time', '0'))
+        first = Fraction(track.get('start_time', '0'))
+        if 'start_pts' in track and 'time_base' in track:
+            first = int(track['start_pts']) * Fraction(track['time_base'])
+        if 'duration_ts' in track and 'time_base' in track:
+            end = first + int(track['duration_ts']) * Fraction(track['time_base'])
+        elif track.get('duration') not in (None, 'N/A'):
+            end = first + Fraction(track['duration'])
+        else:
+            # A container can continue playing audio after its picture ends. Use picture
+            # packet timestamps in containers that omit the video stream duration.
+            packets = subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', stream, '-show_packets',
+                                               '-show_entries', 'packet=pts,duration', '-of', 'compact=p=0:nk=0',
+                                               source], text=True)
+            tick = Fraction(track['time_base'])
+            end = first
+            for line in packets.splitlines():
+                values = dict(piece.split('=', 1) for piece in line.split('|') if '=' in piece)
+                if values.get('pts') not in (None, 'N/A'):
+                    length = values.get('duration')
+                    last = int(values['pts']) + (int(length) if length not in (None, 'N/A') else 0)
+                    end = max(end, last * tick)
+        durations[key] = (first-origin) * fps, (end-origin) * fps
+    # Round only numerical noise from a rolling edit expressed as source seconds.
+    epsilon = Fraction(1, 10**7)
+    first, end = durations[key]
+    before = max(0, math.floor(min(start, start - first) + epsilon))
+    after = max(0, math.floor(end - start - frames + epsilon))
+    if 'source_handle_frames' in shot:
+        limit = shot['source_handle_frames']
+        if not isinstance(limit, list) or len(limit) != 2 or any(type(v) is not int or v < 0 for v in limit):
+            raise ValueError(f"{shot['id']}: source_handle_frames must be [usable before, usable after] in project frames")
+        before, after = min(before, limit[0]), min(after, limit[1])
+    return before, after
+
+
+def plan_bridges(shots, times, fps, *, default_handles='hold', source_path=Path, decisions=None):
     """Incoming edges are indexed like shots. A bridge straddles the nominal cut."""
-    edges = []
+    if default_handles not in ('auto', 'source', 'hold'):
+        raise ValueError('transition_handles must be auto, source or hold')
+    edges, durations = [], {}
     for i, shot in enumerate(shots):
         opt = shot.get('transition', 'cut')
         if isinstance(opt, str):
@@ -37,18 +96,13 @@ def plan_bridges(shots, times, fps):
             continue
         if name not in PRESETS or i == 0:
             raise ValueError(f'Invalid incoming transition at {shot["id"]}: {name}')
-        handles = opt.get('handles', 'hold')
-        if handles not in ('source', 'hold'):
-            raise ValueError(f'Use source or hold for transition handles at {shot["id"]}')
+        handles = opt.get('handles', default_handles)
+        if handles not in ('auto', 'source', 'hold'):
+            raise ValueError(f'Use auto, source or hold for transition handles at {shot["id"]}')
         seconds = float(opt.get('seconds', PRESETS[name]['seconds']))
-        if not math.isfinite(seconds):
+        if not math.isfinite(seconds) or seconds <= 0:
             raise ValueError(f'Invalid transition duration at {shot["id"]}')
         count = round(seconds * fps)
-        left, right = count // 2, count - count // 2
-        if left < 1 or left >= times[i-1]['frames'] or right >= times[i]['frames']:
-            raise ValueError(f'Transition does not fit near {shot["id"]}')
-        if edges[i-1] and edges[i-1].right + left > times[i-1]['frames']:
-            raise ValueError(f'Overlapping transition windows in {shots[i-1]["id"]}')
         anchor, zoom = None, None
         if name == 'push-through':
             anchor, zoom = opt.get('at',[.5,.5]), opt.get('zoom',2.0)
@@ -58,6 +112,27 @@ def plan_bridges(shots, times, fps):
             if type(zoom) not in (float,int) or not math.isfinite(zoom) or zoom <= 1:
                 raise ValueError('push-through.zoom must be greater than 1')
             anchor = tuple(anchor)
+        if handles == 'auto':
+            incoming, _ = source_room(shot, times[i]['frames'], fps, source_path, durations)
+            _, outgoing = source_room(shots[i-1], times[i-1]['frames'], fps, source_path, durations)
+            occupied = edges[i-1].right if edges[i-1] else 0
+            left_room = min(incoming, times[i-1]['frames'] - max(1, occupied))
+            right_room = min(outgoing, times[i]['frames'] - 1)
+            available = min(count, 2 * left_room + 1, 2 * right_room)
+            if (available < count or available < 2) and decisions is not None:
+                decisions.append(dict(shot=shot['id'], preset=name, requested_frames=count,
+                                      actual_frames=available if available >= 2 else 0,
+                                      result='shortened' if available >= 2 else 'cut'))
+            count = available
+            if count < 2:
+                edges.append(None)
+                continue
+            handles = 'source'
+        left, right = count // 2, count - count // 2
+        if left < 1 or left >= times[i-1]['frames'] or right >= times[i]['frames']:
+            raise ValueError(f'Transition does not fit near {shot["id"]}')
+        if edges[i-1] and edges[i-1].right + left > times[i-1]['frames']:
+            raise ValueError(f'Overlapping transition windows in {shots[i-1]["id"]}')
         edges.append(Bridge(name, left, right, handles, anchor, zoom))
     return edges
 

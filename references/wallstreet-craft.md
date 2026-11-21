@@ -68,7 +68,7 @@ QUERY='设备型号 校准动作 发布会'
 "$PY" "$SK/scripts/design_sound.py" land --key counter-stop
 ```
 
-同样支持 `pass` 与 `tick`。工具在当前工程 `assets/sfx/<key>/` 写工作 WAV、合成参数、波形校验值，打印 `key/trim/anchor`。在 `sfx.json` 里沿用这三个值，加上 `shot`、`offset`（镜内动作帧除以 fps 的秒数）、`event`、`peak_db` 和 `pan`。想让渐起声先结束时，按其尾音和动作落点反推 `offset`。运行 `"$PY" "$SK/scripts/soundmix.py"`，将生成的效果轨设为本期 `effects`；真人原声、旁白、配乐、效果保留各自可调电平。人声让位及必要时的音乐抬落走现有 `music_cues`，使用实际成片核对峰值、手机回放和词尾。[声音与画面对位](screen-and-mix-review.md) · [原库的拟音布局](https://github.com/HeyChengC/wallstreet-explainer/blob/f39845abd45dab3c9ce62587aa5d02f6afe82612/references/audio.md#L30-L48)
+同样支持 `pass` 与 `tick`。工具在当前工程 `assets/sfx/<key>/` 写工作 WAV、合成参数、波形校验值，打印 `key/trim/anchor`。在 `sfx.json` 里沿用这三个值，加上 `shot`、`at`（所说的词或原片动作帧）、`event`、`peak_db` 和 `pan`，或沿用距镜头起点的 `offset` 秒数。按音头或尾音需要用 `shift_frames` 调整落点。将 `sfx.json` 设为本期 `sfx_plan`，正式导出会跟随当前剪辑重算。要交独立效果轨，可运行 `"$PY" "$SK/scripts/soundmix.py"`；真人原声、旁白、配乐、效果保留各自可调电平。人声让位及必要时的音乐抬落走现有 `music_cues`，使用实际成片核对峰值、手机回放和词尾。[声音与画面对位](screen-and-mix-review.md) · [原库的拟音布局](https://github.com/HeyChengC/wallstreet-explainer/blob/f39845abd45dab3c9ce62587aa5d02f6afe82612/references/audio.md#L30-L48)
 
 ## 判断画面究竟怎样动
 

@@ -6,7 +6,8 @@ from pathlib import Path
 import tempfile
 
 import color_finish
-from floating_captions import caption_input, cues
+from floating_captions import caption_input, cues, top_caption_ranges
+from picture_finish import caption_y
 from picture_roughcut import STILLS, command, probe
 
 
@@ -56,6 +57,15 @@ def render(plan_path, output):
         if start < 0 or end > total:
             raise ValueError(f'Subtitle outside master: {words}')
 
+    top = plan.get('captions_top_px', max(0,min(height-bottom,bottom-2*font_px)))
+    if type(top) is not int or not 0 <= top < bottom:
+        raise ValueError('captions_top_px must be above the portrait bottom lane')
+    named = [dict(shot, id=str(i)) for i, shot in enumerate(plan['shots'])]
+    timing = [dict(id=str(i), start_frame=a, frames=b-a) for i, (_, a, b) in enumerate(prepared)]
+    edit = dict(shots=named, font=plan.get('font','Heiti SC'), caption_style=plan.get('caption_style','plate'))
+    upper = top_caption_ranges(edit, dict(fps=fps, shots=timing), 0, total, srt=subs, size=(width,height),
+                               portrait_lane=(left,right,top,bottom,font_px))
+
     colors = []
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.portrait-', dir=output.parent) as temp:
@@ -66,8 +76,9 @@ def render(plan_path, output):
             folder.mkdir()
             frames = end - start
             # The shared subtitle renderer sizes type from the virtual band height.
+            top_ranges = [(max(a,start)-start, min(b,end)-start) for a,b in upper if a<end and b>start]
             cap = caption_input(folder, subs, right-left, round(font_px/.045), fps, frames,
-                                start_frame=start, style='plate')
+                                start_frame=start, style=edit['caption_style'], font=edit['font'], top_ranges=top_ranges)
             if not cap:
                 raise ValueError('Use a plain-text SRT so the portrait lane can be positioned.')
             opt = ['-loop', '1', '-framerate', str(fps)] if source.suffix.lower() in STILLS else []
@@ -79,9 +90,10 @@ def render(plan_path, output):
             if profile:
                 report['icc_to_srgb'] = profile
             colors.append(dict(start_frame=start, **report))
+            y = caption_y(top_ranges, fps, top=str(top), bottom=f'{bottom}-overlay_h')
             filters = (f'[0:v]fps={fps},{color},scale={width}:{height},setsar=1,format=yuv420p[base];'
                        f'[1:v]{color_finish.graphics_alpha()}[text];'
-                       f'[base][text]overlay={left}:{bottom}-overlay_h,format=yuv420p')
+                       f'[base][text]overlay={left}:{y},format=yuv420p')
             filename = f'shot-{number}.mp4'
             command('ffmpeg', '-v', 'error', '-nostdin', *opt, '-i', str(source), *cap,
                     '-filter_complex', filters, '-an', '-frames:v', str(frames),
@@ -102,7 +114,7 @@ def render(plan_path, output):
         if int(result['nb_frames']) != total or abs(float(result['duration']) - total/fps) > .5/fps:
             raise ValueError('Portrait timing differs from the source cut.')
         movie.replace(output)
-    return {'output': str(output), 'frames': total, 'fps': str(fps), 'shots': len(prepared), 'color':{'output':color_finish.OUTPUT, 'shots':colors}}
+    return {'output': str(output), 'frames': total, 'fps': str(fps), 'shots': len(prepared), 'caption_top_frames': upper, 'color':{'output':color_finish.OUTPUT, 'shots':colors}}
 
 
 if __name__ == '__main__':

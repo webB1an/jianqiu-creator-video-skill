@@ -24,7 +24,7 @@ SPOKEN_FIGURE = re.compile(
 def new_edit(kind):
     if kind not in ('news', 'explainer'):
         raise ValueError('Use news or explainer for a new narrated draft')
-    return {'size': [1920, 1080], 'fps': 30, 'narration_pace': 'quick',
+    return {'size': [1920, 1080], 'fps': 30, 'narration_pace': 'quick', 'transition_handles': 'auto',
             'story_intent': {'kind': kind, 'main_point': '', 'viewer_value': ''}, 'shots': []}
 
 
@@ -109,7 +109,7 @@ def sentence_pace(timeline, subs):
         return {'matched_sentence_windows': False}
     rows, gaps = [], []
     fps = timeline['fps']
-    for shot in timeline['shots']:
+    for shot in timeline.get('narration_sections', timeline['shots']):
         last = shot['start_frame'] / fps
         for row in by_shot[shot['id']]:
             if row['start'] - last > .001:

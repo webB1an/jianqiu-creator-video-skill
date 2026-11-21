@@ -56,8 +56,8 @@
     "reference":"https://www.reactvideoeditor.com/remotion-templates/spotlight-reveal",
     "implementation":"复用 Remotion 的 Img、OffthreadVideo、Easing 和 interpolate。平滑移动 CSS 径向遮光层，媒体仅解码一次。",
     "media":["source"],
-    "example":{"source":"examples/dial-after.svg","fromFocus":[0.40,0.48],"toFocus":[0.66,0.44],"fromRadius":0.57,"toRadius":0.20,"dim":0.72},
-    "parameters":"source 接图片或视频，fit 默认为 contain，可选 cover；sourceStart 指视频起始帧。fromFocus、toFocus 是画框归一化坐标 [x,y]，fromRadius、toRadius 为画面短边的比例（0.025–1.5）。feather 表示边缘过渡占半径比例（0–0.95），dim 是光窗外压暗程度（0–0.92）。startFrame、endFrame 指定运动区间，停住后继续读原件。"
+    "example":{"source":"examples/dial-after.svg","stops":[{"at":0,"holdUntil":10,"focus":[0.50,0.50],"radius":0.58},{"at":32,"holdUntil":47,"focus":[0.64,0.43],"radius":0.20},{"at":68,"focus":[0.50,0.68],"radius":0.23}],"dim":0.72},
+    "parameters":"source 接图片或视频，fit 默认为 contain，可选 cover；sourceStart 指视频起始帧。fromFocus、toFocus 是画框归一化坐标 [x,y]，fromRadius、toRadius 为画面短边的比例（0.025–1.5）。feather 表示边缘过渡占半径比例（0–0.95），dim 是光窗外压暗程度（0–0.92）。startFrame、endFrame 指定运动区间，停住后继续读原件。多处证据用 stops 数组，每站给 at、focus、radius，可用 holdUntil 留出阅读。第一站从第 0 帧起，最后一站留到镜尾。"
   },
   {
     "id":"photo-stack",

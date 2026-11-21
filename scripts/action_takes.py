@@ -67,6 +67,16 @@ def plan_comparison(plan, folder):
         contact = item['contact_frame']
         if not integers(bounds, 2) or type(contact) is not int or not 0 <= bounds[0] <= contact < bounds[1] < len(ticks):
             raise ValueError(f'{name}: usable_frames and contact_frame must lie within the decoded frame range')
+        marks = {'contact': contact}
+        for phase in ('onset', 'result'):
+            field = phase + '_frame'
+            if field in item:
+                frame = item[field]
+                if type(frame) is not int or not 0 <= frame < len(ticks)-1 or ticks[frame+1] <= ticks[frame]:
+                    raise ValueError(f'{name}: {field} must name a source frame with a positive display interval')
+                marks[phase] = frame
+        if not marks.get('onset', contact) <= contact <= marks.get('result', contact):
+            raise ValueError(f'{name}: expected onset_frame <= contact_frame <= result_frame')
         first, anchor, end = (ticks[n] * tb for n in (bounds[0],contact,bounds[1]))
         if ticks[contact+1] <= ticks[contact] or end <= anchor:
             raise ValueError(f'{name}: choose a contact frame with a known positive display interval')
@@ -74,9 +84,34 @@ def plan_comparison(plan, folder):
         after = min(after, math.floor((end-anchor)*fps))
         crop = crop_box(item.get('crop'), *info['raster'], info['aspect'], target)
         takes.append(dict(id=name, path=path, info=info, bounds=bounds, first=first, anchor=anchor, end=end,
-                          contact=contact, crop=crop, eye_trace=item.get('eye_trace')))
+                          contact=contact, marks=marks, crop=crop, target=target, eye_trace=item.get('eye_trace')))
     pane = (phone, max(1, round(phone*target[1]/target[0])))
     return takes, target, fps, pane, before, after
+
+
+def action_marks(take, fps, before, after):
+    """Locate an exact source frame on the same round-up output clock used by comparison_stream."""
+    ticks, unit = take['info']['ticks'], take['info']['tb']
+    start = take['anchor'] - Fraction(before, fps)
+    stop = start + Fraction(before + after, fps)
+    result = {}
+    for phase in ('onset', 'contact', 'result'):
+        if phase not in take['marks']:
+            continue
+        frame = take['marks'][phase]
+        lo, hi = ticks[frame]*unit, ticks[frame+1]*unit
+        first = max(0, math.ceil((lo - start)*fps))
+        visible = first < min(before + after, math.ceil((hi - start)*fps))
+        if not take['bounds'][0] <= frame < take['bounds'][1]:
+            status = 'outside_usable'
+        elif hi <= start or lo >= stop:
+            status = 'outside_window'
+        else:
+            status = 'visible' if visible else 'between_ticks'
+        result[phase] = dict(source_frame=frame, source_pts_seconds=float(lo),
+                             from_contact_seconds=float(lo - take['anchor']),
+                             preview_frame=first if visible else None, status=status)
+    return result
 
 
 def summary(takes, target, fps, pane, before, after):
@@ -89,6 +124,8 @@ def summary(takes, target, fps, pane, before, after):
                          available_after_seconds=float(row['end']-row['anchor']), crop=row['crop'],
                          max_axis_scale_to_target=round(max(target[0]/width, target[1]/height),3),
                          has_audio_stream=row['info']['audio'] is not None, eye_trace=row['eye_trace']))
+        if len(row['marks']) > 1:
+            rows[-1]['action_marks'] = action_marks(row, fps, before, after)
     return dict(target=target, pane=pane, fps=fps, contact_preview_frame=before,
                 total_preview_frames=before+after, takes=rows)
 
@@ -124,6 +161,43 @@ def comparison_stream(takes, target, fps, pane, before, after, listen):
     return args + ['-c:v','libx264','-pix_fmt','yuv420p','-preset','veryfast','-crf','14']
 
 
+def mark_controls(takes, pane, before, after, fps, folder):
+    """Link sampled marks into the comparison and show exact source stills for marks it omits."""
+    labels = {'onset':'起势', 'contact':'接触', 'result':'结果首次可辨'}
+    reasons = {'outside_usable':'在此机位可用段外', 'outside_window':'在并排窗口外',
+               'between_ticks':'位于两格预览帧之间'}
+    groups = []
+    for i, take in enumerate(takes):
+        if len(take['marks']) == 1:
+            continue
+        marks = action_marks(take, fps, before, after)
+        missing = sorted({m['source_frame'] for m in marks.values() if m['preview_frame'] is None})
+        pictures = {}
+        if missing:
+            # A short VFR source frame can fall entirely between two proxy ticks.
+            # Extract by native display index so that the exact authored frame remains inspectable.
+            select = '+'.join(f'eq(n,{n})' for n in missing)
+            framing = crop_filter(take['crop'], take['info']['stream'], take['target'], output_size=pane)
+            stem = folder/f'take-{i}-%d.png'
+            subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-i', str(take['path']),
+                            '-map', f"0:{take['info']['video']}", '-vf', f"select='{select}',{framing}",
+                            '-fps_mode', 'passthrough', '-frames:v', str(len(missing)), str(stem)], check=True)
+            for index, source_frame in enumerate(missing, 1):
+                data = (folder/f'take-{i}-{index}.png').read_bytes()
+                pictures[source_frame] = base64.b64encode(data).decode('ascii')
+        items = []
+        for phase, mark in marks.items():
+            source_frame, preview = mark['source_frame'], mark['preview_frame']
+            name = f'{labels[phase]} · 源 F{source_frame}'
+            if preview is not None:
+                items.append(f'<button data-frame="{preview}">{name} · 对照 F{preview}</button>')
+            else:
+                items.append(f'<details><summary>{name} · {reasons[mark["status"]]} · 查看原帧</summary>'
+                             f'<img width="{pane[0]}" alt="{name}" src="data:image/png;base64,{pictures[source_frame]}"></details>')
+        groups.append('<section><strong>' + escape(take['id']) + '</strong> ' + ' '.join(items) + '</section>')
+    return '\n'.join(groups)
+
+
 def save_view(target_path, takes, pane, before, after, fps, listen, encode):
     if target_path.suffix.lower() != '.html' or target_path.resolve() in {t['path'] for t in takes}:
         raise ValueError('Choose a separate HTML path for the source review')
@@ -137,16 +211,23 @@ def save_view(target_path, takes, pane, before, after, fps, listen, encode):
         sound = '静音' if listen is None else '独听原声　'+escape(listen)
         payload = base64.b64encode(proxy.read_bytes()).decode('ascii')
         width = 2 * math.ceil(pane[0]*len(takes)/2)
+        controls = mark_controls(takes, pane, before, after, fps, Path(tmp))
         page = Path(tmp)/'view.html'
         page.write_text(f"""<!doctype html><html lang="zh-CN"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>动作选材</title>
 <style>body{{font:16px/1.55 system-ui,sans-serif;margin:1.25rem;color:#ecebe7;background:#171b19}}
 header{{margin-bottom:1em}} video{{display:block}} p{{margin:.3em 0;color:#c9cfc9}}</style>
 <header><strong>{title}</strong><p>{sound} · 接触帧 F{before} · {before/fps:.3f} 秒 · 单格 {pane[0]} 像素宽</p>
-<button id="contact">定位接触帧</button></header>
+<button data-step="-1">上一帧</button> <button id="contact" data-frame="{before}">定位接触帧</button>
+<button data-step="1">下一帧</button> <output id="position"></output></header>
 <video controls playsinline width="{width}" src="data:video/mp4;base64,{payload}"></video>
-<script>const video=document.querySelector('video');document.querySelector('#contact').onclick=()=>{{
-video.pause();video.currentTime={(before+0.5)/fps:.9f};}};</script></html>""")
+{controls}
+<script>const video=document.querySelector('video'),fps={fps},last={before+after-1};
+function currentFrame(){{return Math.min(last,Math.floor(video.currentTime*fps));}}
+function showFrame(frame){{video.pause();video.currentTime=(Math.max(0,Math.min(last,frame))+0.5)/fps;}}
+for(const button of document.querySelectorAll('[data-frame]'))button.onclick=()=>showFrame(Number(button.dataset.frame));
+for(const button of document.querySelectorAll('[data-step]'))button.onclick=()=>showFrame(currentFrame()+Number(button.dataset.step));
+video.ontimeupdate=()=>{{document.querySelector('#position').textContent='对照 F'+currentFrame();}};</script></html>""")
         os.replace(page,target_path)
 
 

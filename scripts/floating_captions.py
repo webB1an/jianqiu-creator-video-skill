@@ -2,6 +2,7 @@
 from collections import defaultdict
 from fractions import Fraction
 from functools import lru_cache
+from math import ceil
 from pathlib import Path
 import re
 import shutil
@@ -10,6 +11,7 @@ import subprocess
 from PIL import Image, ImageDraw, ImageFont
 
 from identity import face
+from picture_reservations import overlaps, protected_regions
 
 TIMING = re.compile(r'^(\d+:\d\d:\d\d[,.]\d{3})\s*-->\s*(\d+:\d\d:\d\d[,.]\d{3})(?:\s.*)?$')
 
@@ -68,7 +70,8 @@ def sticker(text, font_name, size, max_width, mode):
     if right-left+2*pad_x > max_width:
         font = get_font(max(1,int(size*(max_width-2*pad_x)/(right-left))))
         left,top,right,bottom = bounds()
-    w,h = right-left+pad_x*2, bottom-top+pad_y*2
+    # Centered multiline text can have half-pixel ink bounds.
+    w,h = ceil(right-left)+pad_x*2, ceil(bottom-top)+pad_y*2
     im=Image.new('RGBA',(max(w,1),max(h,1)))
     draw=ImageDraw.Draw(im)
     if mode == 'plate':
@@ -78,28 +81,104 @@ def sticker(text, font_name, size, max_width, mode):
     return im
 
 
-def top_caption_ranges(edit, timeline, start_frame, frames):
-    """Local, half-open frame ranges for shots whose lower third contains evidence."""
-    top_ids = set()
-    for shot in edit.get('shots', []):
-        position = shot.get('caption_position', 'bottom')
-        if position not in ('top', 'bottom'):
-            raise ValueError('shots[].caption_position must be top or bottom')
-        if position == 'top':
-            top_ids.add(shot['id'])
-    if not top_ids:
-        return []
+def _auto_positions(regions, srt, fps, size, font, style, lane):
+    """Choose once per uninterrupted cue (including overlapping cues), using actual sticker bounds."""
+    width, height = size
+    if lane is None:
+        left, right, top, bottom, px = 0, width, 0, height, round(height*.045)
+        virtual_height = height
+    else:
+        left, right, top, bottom, px = lane
+        virtual_height = round(px/.045)
+    margin = max(1, round(virtual_height*.028))
+    events = defaultdict(list)
+    for i, (a, b, text) in enumerate(cues(Path(srt), Fraction(str(fps)))):
+        if a < b:
+            events[a].append((i, text))
+            events[b].append((i, None))
+    @lru_cache(maxsize=128)
+    def bounds(phrase):
+        im = sticker(phrase, font, max(12,px), round((right-left)*.88), style)
+        x = left + (right-left-im.width)//2
+        return [(x/width, y/height, (x+im.width)/width, (y+im.height)/height)
+                for y in (bottom-margin-im.height, top+margin)]
+
+    active, blocked, group_start = {}, [set(), set()], None
     ranges = []
-    for shot in timeline.get('shots', []):
-        if shot['id'] not in top_ids:
+    points = sorted(events)
+    for i, frame in enumerate(points):
+        for idx, text in events[frame]:
+            if text is None:
+                active.pop(idx, None)
+        if not active and group_start is not None:
+            if blocked[0] and blocked[1]:
+                labels = '、'.join(sorted(blocked[0] | blocked[1]))
+                raise ValueError(f'字幕 F{group_start}–{frame} 的上下位置均与「{labels}」重合。'
+                                 '请调整包装出场时机、保护区或指定本镜 caption_position。')
+            if blocked[0]:
+                ranges.append((group_start, frame))
+            group_start, blocked = None, [set(), set()]
+        for idx, text in events[frame]:
+            if text is not None:
+                active[idx] = text
+        if not active or i+1 == len(points):
             continue
-        start = shot['start_frame'] - start_frame
-        lo, hi = max(0, start), min(frames, start + shot['frames'])
-        if lo < hi:
-            if ranges and ranges[-1][1] == lo:
-                lo, _ = ranges.pop()
-            ranges.append((lo, hi))
+        if group_start is None:
+            group_start = frame
+        phrase = '\n'.join(active[k] for k in sorted(active))
+        for a, b, box, label in regions:
+            if a >= points[i+1] or b <= frame:
+                continue
+            for index, caption_box in enumerate(bounds(phrase)):
+                if overlaps(caption_box, box):
+                    blocked[index].add(label)
     return ranges
+
+
+def top_caption_ranges(edit, timeline, start_frame, frames, *, srt=None, size=None, portrait_lane=None):
+    """Compute positions on the full programme, then clip to the requested local window."""
+    shots = {shot['id']: shot for shot in edit.get('shots', [])}
+    planned, regions = [], []
+    for timing in timeline.get('shots', []):
+        shot = shots.get(timing['id'], {})
+        position = shot.get('caption_position')
+        if position is not None and position not in ('top', 'bottom'):
+            raise ValueError('shots[].caption_position must be top or bottom')
+        begin = timing['start_frame']
+        planned.append((begin, begin + timing['frames'], position))
+        boxes = list(protected_regions(shot, timing['frames']))
+        if position is None:
+            settings = shot.get('remotion_effect', {})
+            if portrait_lane is None and 'placement' in settings:
+                from remotion_library import placement_record, project_params
+                location = placement_record(settings, project_params(shot, timeline, timing))
+                a, b = location['frames']
+                boxes.append((a, b, location['box'], '人物身份条'))
+            regions.extend((begin+a, begin+b, box, label) for a,b,box,label in boxes)
+
+    auto = []
+    if regions:
+        if srt is None or size is None:
+            raise ValueError('Timed caption reservations require the SRT and output size')
+        if not _styled_srt(srt):
+            auto = _auto_positions(regions, srt, timeline['fps'], size, edit.get('font', 'Heiti SC'),
+                                   edit.get('caption_style', 'plate'), portrait_lane)
+    result = []
+    for begin, end, position in planned:
+        intervals = [(begin, end)] if position == 'top' else auto if position is None else []
+        for left, right in intervals:
+            lo = max(start_frame, begin, left)-start_frame
+            hi = min(start_frame+frames, end, right)-start_frame
+            if lo < hi:
+                if result and result[-1][1] == lo:
+                    lo, _ = result.pop()
+                result.append((lo, hi))
+    return result
+
+
+def _styled_srt(srt):
+    return re.search(r'<(?:/?(?:b|i|u|s|font)\b)[^>]*>|\{\\[^}]*\}|-->[^\n]+\sX1:\s*\d+',
+                     Path(srt).read_text(encoding='utf-8-sig'), re.I)
 
 
 def caption_input(folder, srt, width, height, fps, frames, *, start_frame=0, style='plate', font='Heiti SC',
@@ -110,8 +189,7 @@ def caption_input(folder, srt, width, height, fps, frames, *, start_frame=0, sty
     if frames < 1:
         raise ValueError('Empty picture interval')
     # Let libass preserve explicit positioning and inline styles on imported subtitles.
-    if re.search(r'<(?:/?(?:b|i|u|s|font)\b)[^>]*>|\{\\[^}]*\}|-->[^\n]+\sX1:\s*\d+',
-                 Path(srt).read_text(encoding='utf-8-sig'), re.I):
+    if _styled_srt(srt):
         return []
     rate = Fraction(str(fps))
     folder = Path(folder)

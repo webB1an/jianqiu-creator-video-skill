@@ -8,6 +8,8 @@ import subprocess
 import sys
 import tempfile
 import wave
+
+from roughcut_adoption import align_picture, narration_shots
 from pathlib import Path
 
 ROOT = Path.home()/'.cache/creator-video-models/melo'
@@ -38,7 +40,7 @@ def stamp(sample):
     ms = round(sample*1000/RATE)
     return f'{ms//3600000:02}:{ms//60000%60:02}:{ms//1000%60:02},{ms%1000:03}'
 
-def prepare(edit, pins, staging):
+def prepare(edit, pins, staging, *, guide_only=False):
     import numpy as np
     from captioning import MIN_CUE_SECONDS
     from jianqiu_voice import JianqiuVoice, VOICE_ID
@@ -48,6 +50,7 @@ def prepare(edit, pins, staging):
 
     from pronunciation_review import with_context_directions
     edit = with_context_directions(edit)
+    picture = None if guide_only else edit
     pace = narration_pace(edit)
     w,h=edit.get('size',[1920,1080])
     if min(w,h)<=0 or w*9!=h*16:raise ValueError('Jianqiu video masters require a 16:9 frame')
@@ -60,7 +63,8 @@ def prepare(edit, pins, staging):
     presenter=edit.get('presenter') or {}
     if isinstance(presenter,dict) and presenter.get('recording'):
         from presenter_source import prepare_performance
-        return finish_prepare(staging,pins,fps,*prepare_performance(edit,pins,fps,stamp))
+        voice_edit = dict(edit, shots=narration_shots(edit))
+        return finish_prepare(staging,pins,fps,*prepare_performance(voice_edit,pins,fps,stamp),edit=picture)
     cursor=0
     pieces=[]
     shots=[]
@@ -87,7 +91,9 @@ def prepare(edit, pins, staging):
         if size<0: raise ValueError('Negative pause')
         pieces.append(np.zeros(size,dtype='<i2'))
         cursor+=size
-    for shot in edit['shots']:
+    from section_pace import required_word_lines
+    wanted_lines = required_word_lines(edit, pins)
+    for shot in narration_shots(edit):
         start=cursor
         pause(shot.get('lead',0.08))
         for index,line in enumerate(shot['lines']):
@@ -152,13 +158,17 @@ def prepare(edit, pins, staging):
             end=cursor+len(arr)
             beat=None
             cue_clock = shot.get('remotion_effect', {}).get('cues')
-            if edit.get('word_clock') or 'word_times' in line or cue_clock or (shot.get('explainer_scene') and line.get('id')):
+            line_id = line.get('id', f"{shot['id']}.L{index + 1}")
+            caption_clock = (edit.get('word_clock') or 'word_times' in line or cue_clock
+                             or (shot.get('explainer_scene') and line.get('id')))
+            if caption_clock or line_id in wanted_lines:
                 from speech_clock import take_beat
                 beat=take_beat(shot['id'],line,index,arr,RATE,cursor)
                 beats.append(beat)
             voice_takes.append(dict(shot=shot['id'],file=str(path),sha256=pins.hashes[pins.key(path)],
                                     spoken=words,start_sample=cursor,end_sample=end,sample_rate=RATE,**take))
-            units,cuts=timed_captions(line,arr,RATE,beat=beat,origin=cursor)
+            # Adding a picture or sound cue to an existing take must preserve its subtitle cuts.
+            units,cuts=timed_captions(line,arr,RATE,beat=beat if caption_clock else None,origin=cursor)
             voice_takes[-1]['caption_units']=units
             for a,b,unit in zip(cuts,cuts[1:],units):
                 if b-a < MIN_CUE_SECONDS * RATE:
@@ -173,10 +183,10 @@ def prepare(edit, pins, staging):
         padding=(-cursor)%quantum
         pieces.append(np.zeros(padding,dtype='<i2'));cursor+=padding
         shots.append(dict(id=shot['id'],start_frame=start//quantum,frames=(cursor-start)//quantum))
-    return finish_prepare(staging,pins,fps,pieces,cursor,shots,captions,voice_takes,beats)
+    return finish_prepare(staging,pins,fps,pieces,cursor,shots,captions,voice_takes,beats,edit=picture)
 
 
-def finish_prepare(staging,pins,fps,pieces,cursor,shots,captions,voice_takes,beats,presenter_source=None):
+def finish_prepare(staging,pins,fps,pieces,cursor,shots,captions,voice_takes,beats,presenter_source=None,*,edit=None):
     from production_run import digest
     if not shots or len(set(s['id'] for s in shots))!=len(shots): raise ValueError('Use unique shot IDs')
     if len({b['id'] for b in beats})!=len(beats): raise ValueError('Use unique spoken line ids across the edit')
@@ -188,10 +198,26 @@ def finish_prepare(staging,pins,fps,pieces,cursor,shots,captions,voice_takes,bea
     prepared_files = {name: digest(staging/name) for name in ('audio/narration.wav', 'audio/captions.srt')}
     timeline = dict(edit_sha256=pins.hashes['edit.json'], claim_surfaces_version=1, fps=fps, frames=round(cursor*fps/RATE),
                     shots=shots, voice_takes=voice_takes, prepared_files=prepared_files)
+    if edit and edit.get('picture_edit'):
+        expected = edit['picture_edit'].get('guided_narration_sha256')
+        if expected and expected != prepared_files['audio/narration.wav']:
+            raise ValueError('The selected cut used an earlier narration recording. Compare the source assembly against this recording before re-adopting.')
+        timeline['narration_sections'] = shots
+        timeline['shots'] = align_picture(edit, timeline['frames'], fps)
     from pronunciation_review import summary as pronunciation_summary
     timeline['pronunciation_review'] = pronunciation_summary(voice_takes)
     if beats:timeline['beats']=beats
     if presenter_source:timeline['presenter_source']=presenter_source
+    if edit:
+        from picture_holds import planned_still_holds
+        holds = planned_still_holds(edit, timeline)
+        if holds:
+            timeline['still_picture_notes'] = holds
+            print('Review narrated stills before rendering:', ', '.join(row['target'] for row in holds), file=sys.stderr)
+        from section_pace import evidence_readings
+        readings = evidence_readings(edit, timeline)
+        if readings:
+            timeline['evidence_readings'] = readings
     (staging/'timeline.json').write_text(json.dumps(timeline,indent=2))
     return timeline
 
@@ -202,7 +228,7 @@ def read_script(edit, line_ids):
     missing = []
     presenter = edit.get('presenter')
     recorded_programme = isinstance(presenter, dict) and bool(presenter.get('recording'))
-    for shot in edit['shots']:
+    for shot in narration_shots(edit):
         shot_id = shot['id']
         if 'lines' not in shot:
             missing.append((shot_id, '缺少实录逐字稿' if recorded_programme else '镜头未登记台词'))
@@ -239,10 +265,48 @@ def main():
                       help='Print only the scripted spoken words from edit.json, without audio preparation')
     mode.add_argument('--new-edit', choices=('news', 'explainer'),
                       help='Create a new edit.json with the current spoken pace, without generating media')
+    mode.add_argument('--adopt-roughcut', type=Path, metavar='RECEIPT',
+                      help='Apply the chosen source assembly to edit.json on the prepared narration clock')
+    cli.add_argument('--plan', type=Path, help='Source plan used to render the rough-cut receipt')
+    cli.add_argument('--guide-dir', type=Path, help='Prepare a new narration guide here, or adopt a full rough cut timed to that guide')
+    cli.add_argument('--version', choices=('first','alternate'), default=None)
     cli.add_argument('--line-ids', action='store_true', help='With --read-script, label each line for revision')
     args = cli.parse_args()
     if args.line_ids and not args.read_script:
         cli.error('--line-ids requires --read-script')
+    if args.adopt_roughcut:
+        if not args.plan or not args.version:
+            cli.error('--adopt-roughcut requires --plan and --version')
+        from production_run import InputSnapshot, stage_run
+        from roughcut_adoption import adopt
+        try:
+            with stage_run('adopt-roughcut') as (work, status):
+                result = adopt(args.adopt_roughcut, args.plan, args.version, InputSnapshot(work/'inputs'), args.guide_dir)
+                status.update(result)
+            print(json.dumps(result, ensure_ascii=False))
+        except (ValueError, OSError, KeyError) as exc:
+            cli.exit(1, f'{exc}\n')
+        return 0
+    if args.plan or args.version:
+        cli.error('--plan and --version require --adopt-roughcut')
+    if args.guide_dir:
+        if args.new_edit or args.read_script:
+            cli.error('--guide-dir is used alone or with --adopt-roughcut')
+        from production_run import InputSnapshot, stage_run
+        from tempfile import TemporaryDirectory
+        target = args.guide_dir
+        if target.exists() or target.is_symlink():
+            cli.error('Choose a new directory for this narration guide')
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with stage_run('narration-guide') as (work, status), TemporaryDirectory(dir=target.parent) as tmp:
+            pins = InputSnapshot(work/'inputs')
+            edit = json.loads(pins.pin('edit.json').read_text())
+            staging = Path(tmp)/'guide'
+            timeline = prepare(edit, pins, staging, guide_only=True)
+            pins.verify()
+            staging.rename(target)
+            status.update(frames=timeline['frames'], guide=str(target))
+        return 0
     if args.new_edit:
         from narration_pace import new_edit
         try:

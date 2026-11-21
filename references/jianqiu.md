@@ -26,7 +26,7 @@ draw.text((96, 120), value, font=card_face("metric", 80, value), fill=colors["ac
 
 **音效入库。** 先按动作、材质、空间和时长查本地 assets/sfx。需要新音源时，执行 python scripts/soundbank.py search "camera shutter"，根据匹配度筛选，再比较评分、评分人数与下载量。高分少票只作候选。详情页没有评分时如实保留空值。遇到 Freesound 搜索限流，search 自动查询 Openverse；返回 openverse_id。核对作者原页的 CC0 条款后可在 add 命令加 --openverse-id ID 使用索引的公开试听链接，索引不提供的评分维持空值。选定后用 python scripts/soundbank.py add shutter <Freesound声音页面> 入库。本工具验证页面声明为 CC0，保存该页面公开提供的 HQ MP3 预览、48kHz 工作 WAV、作者、当日评分与哈希。试听预览不是上传者的无损母带。其他来源（包括 Pixabay）按其实际许可使用，下载次数和星级分别记录。来源限制单独再分发时不打入可迁移包。每次用过的录音直接留在库里，定期复用，不重复下载。
 
-**对画面落声。** 在项目根目录写 sfx.json，元素含 shot、offset（距镜头开始秒数）、key（库中名称）、trim（源音频截取起止秒）、anchor（源音频中动作发生的秒）、peak_db、pan、event。运行 python scripts/soundmix.py，工具将真正的动作峰值对准时间轴，生成 audio/effects.wav 与 qa/sound-cues.json。把用到的资产快照放进项目 assets/sfx 可离线重建。音效用于实体动作或有意义的交接；讲解需要专注的地方留静。独立听人声、拟音，再核对终混响度、单声道听辨和字幕。声音库浏览入口为 assets/sfx/catalog.html。
+**对画面落声。** 在项目根目录写 sfx.json，元素含 shot、key（库中名称）、trim（源音频截取起止秒）、anchor（录音中所选瞬态的秒）、peak_db、pan、event。用 at 指定实际口播词或原片动作帧，需提前或延后时加 shift_frames，也可沿用距镜头起点的 offset 秒数。将文件路径写入 edit.sfx_plan，重录后正式导出会重新落声；独立运行 soundmix.py 可生成 audio/effects.wav 与 qa/sound-cues.json 试听。普通实拍可用 location_sound 让现场声跨切点延续。[词锚、动作帧与同期声写法](screen-and-mix-review.md#用重读词和动作接触帧定位声音)。把用到的资产快照放进项目 assets/sfx 可离线重建。音效用于实体动作或有意义的交接；讲解需要专注的地方留静。独立听人声、拟音，再核对终混响度、单声道听辨和字幕。声音库浏览入口为 assets/sfx/catalog.html。
 
 ## 让两项实数和它们的差依次出现
 

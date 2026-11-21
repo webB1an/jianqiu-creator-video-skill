@@ -59,7 +59,8 @@ def main():
     engine=so.OfflineRecognizer.from_sense_voice(model=str(args.model/'model.int8.onnx'),tokens=str(args.model/'tokens.txt'),language='zh',num_threads=2,use_itn=False)
     edit=json.loads(Path('edit.json').read_text())
     timeline=json.loads(Path('timeline.json').read_text())
-    rows=[(s,l) for s in edit['shots'] for l in s['lines']]
+    from roughcut_adoption import narration_shots
+    rows=[(s,l) for s in narration_shots(edit) for l in s['lines']]
     report=[]
     for (shot,line),record in zip(rows,timeline['voice_takes'],strict=True):
         if record['shot']!=shot['id']:

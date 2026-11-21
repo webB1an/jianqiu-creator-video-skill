@@ -40,7 +40,7 @@
       "name": "见秋",
       "role": "视频讲述"
     },
-    "parameters": "name 为姓名，role 为可选身份。theme 取 dark 或 light，accent 设置竖线颜色，background 可指定整幅底色，默认透明。"
+    "parameters": "name 为姓名，role 为可选身份。theme 取 dark 或 light，accent 设置竖线颜色，background 可指定整幅底色，默认透明。startFrame 指入场帧，endFrame 指身份条撤下的第一帧，可避开原件读数与主字幕。"
   },
   {
     "id": "text-highlight",
@@ -76,7 +76,7 @@
       "source": "操作提示",
       "theme": "light"
     },
-    "parameters": "segments 按原句顺序填写。常规片段写字符串，需划亮的写 {text,at}，at 为含首帧 0 的镜内帧号。source 是可选出处，theme 取 dark 或 light，accent 为划线颜色。"
+    "parameters": "segments 按原句顺序填写。常规片段写字符串，需划亮的写 {text,at}，at 为镜内开始帧，可选 until 指划线完成帧。在分镜的 cues 中可将 segments[1].at 和 segments[1].until 分别绑到实读词。source 是可选出处，theme 取 dark 或 light，accent 为划线颜色。"
   },
   {
     "id": "quote-card",

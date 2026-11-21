@@ -73,3 +73,8 @@
   }]
 }
 ```
+
+
+### 首看封存后追问一个新例子
+
+有 `story_intent.transfer_task` 的片子，先照常封存并导入同一版的无提示连续首看。再把 `question` 单独给其中一位观众，保留回答原话，主编保管 `criterion`。报告含 `candidate_sha256`、`reviewer`、原题 `question` 和原答 `answer`，用 `editorial_review.py transfer 候选.mp4 回答.json` 导入。会议在这位观众的 `story_readings` 写 `transfer` 为 `matched`、`partial` 或 `missed`，在 `basis` 指出回答能解释或遗漏的那一步。缺答或未掌握时退改；让新观众复看新版本。

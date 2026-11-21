@@ -45,7 +45,8 @@ def main():
         shutil.copyfile(args.captions, work / 'captions.srt')
         brand_image(w, h, work / 'mark.png')
         font = edit.get('font','Heiti SC')
-        top_ranges = top_caption_ranges(edit, timeline, args.start_frame, frames)
+        top_ranges = top_caption_ranges(edit, timeline, args.start_frame, frames,
+                                        srt=work/'captions.srt', size=(w,h))
         captions = caption_input(work, work/'captions.srt', w, h, fps, frames,
                                  start_frame=args.start_frame, style=edit.get('caption_style','plate'), font=font,
                                  top_ranges=top_ranges)

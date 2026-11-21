@@ -18,6 +18,14 @@ def brand_image(width, height, path):
     brand_sticker(height).save(path)
 
 
+def caption_y(top_ranges, fps, *, top='0', bottom='H-h'):
+    if not top_ranges:
+        return bottom
+    # FFmpeg timestamps can round either side of the nominal frame boundary.
+    active = '+'.join(f'between(t*{fps},{lo-.5},{hi-.5})' for lo,hi in top_ranges)
+    return f"'if({active},{top},{bottom})'"
+
+
 def overlay_chain(width, height, font, *, brand_index, caption_index=None, start_frame=0, fps=30,
                   source_filter=None, top_ranges=(), montage_pins=()):
     style = f'FontName={font},FontSize=13,Outline=1.1,Shadow=0,MarginV=16,Alignment=2'
@@ -33,11 +41,7 @@ def overlay_chain(width, height, font, *, brand_index, caption_index=None, start
     picture = f'{base}[mark]overlay=W-w-{round(width*.042)}:{round(height*.055)}'
     if caption_index is not None:
         layers += f'[{caption_index}:v]{graphics_alpha()}[text];'
-        y = 'H-h'
-        if top_ranges:
-            # FFmpeg timestamps can round either side of the nominal frame boundary.
-            active = '+'.join(f'between(t*{fps},{lo-.5},{hi-.5})' for lo,hi in top_ranges)
-            y = f"'if({active},0,H-h)'"
+        y = caption_y(top_ranges, fps)
         return layers + picture + f'[branded];[branded][text]overlay=0:{y},format=yuv420p[picture]'
     if start_frame:
         picture += f',settb=1/{fps},setpts=PTS-STARTPTS+{start_frame}'
