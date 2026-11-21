@@ -1,0 +1,37 @@
+{
+  "kick": {
+    "source": "https://raw.githubusercontent.com/sfzinstruments/virtuosity_drums/9f04cf9a734527edfbb0a4eee1f674e45bbf71bc/Samples/mid/kick/mid_kick_snoff_vl3_rr1.flac",
+    "license": "CC0 1.0",
+    "license_page": "https://github.com/sfzinstruments/virtuosity_drums/blob/9f04cf9a734527edfbb0a4eee1f674e45bbf71bc/LICENSE",
+    "original_sha256": "f25318f16ca4e74f5575c275a24f92a7579acb8d69a078ed7db325ef483dd5ca",
+    "sha256": "c38519981058ea85285dc6c8b704d28f5a4fdfefa7bfbc99a78a01ded64adf85"
+  },
+  "rim": {
+    "source": "https://raw.githubusercontent.com/sfzinstruments/virtuosity_drums/9f04cf9a734527edfbb0a4eee1f674e45bbf71bc/Samples/mid/snare/mid_snare_crossstick_vl3.flac",
+    "license": "CC0 1.0",
+    "license_page": "https://github.com/sfzinstruments/virtuosity_drums/blob/9f04cf9a734527edfbb0a4eee1f674e45bbf71bc/LICENSE",
+    "original_sha256": "3b89eb2bb8e0813fcf6d9aba5bdd472db044d8afe2d790f7508c4a477b2e7549",
+    "sha256": "11c211e52c0766e8efa7081561beadbe861e654a0cf0ccf25a374e36c6961fde"
+  },
+  "hat": {
+    "source": "https://raw.githubusercontent.com/sfzinstruments/virtuosity_drums/9f04cf9a734527edfbb0a4eee1f674e45bbf71bc/Samples/mid/hh/mid_hh_closed_vl3_rr1.flac",
+    "license": "CC0 1.0",
+    "license_page": "https://github.com/sfzinstruments/virtuosity_drums/blob/9f04cf9a734527edfbb0a4eee1f674e45bbf71bc/LICENSE",
+    "original_sha256": "5a747638b0acb5dc42f2e68c61b29085a489af524bdd5da180cb1de542e1bad1",
+    "sha256": "c89cee9e105f142480f243da58f017dec31626ad14ecdaaec9f3373a9a723d91"
+  },
+  "wood": {
+    "source": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Marimba/Marimba_hit_Outrigger_F3_soft_01.wav",
+    "license": "CC0 1.0",
+    "license_page": "https://github.com/sgossner/VCSL/blob/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/LICENSE",
+    "original_sha256": "6eb7ccf5fa10b1bdaf10f0cc7a50d8c42ef086636a9e88c6527fb3af58e5ee1f",
+    "sha256": "b224a539747105de2b9cc1c996e74bd0f545de4a3a70a683e6b9e76f933b8b31"
+  },
+  "pluck": {
+    "source": "https://raw.githubusercontent.com/facebookincubator/Meta-open-sound/514c926efecdb3c7812bf00eedf8e5c8d61dd681/systems/instruments/meta-nylon-guitar/ogg/INSGuitarNylon_StringA_Vel01Finger_A2_01.ogg",
+    "license": "CC0 1.0",
+    "license_page": "https://github.com/facebookincubator/Meta-open-sound/blob/514c926efecdb3c7812bf00eedf8e5c8d61dd681/systems/instruments/meta-nylon-guitar/LICENSE",
+    "original_sha256": "bdccb28f3c24422351d9f8aece2c53efbb8b8ef69df571457aadc6612a882d9d",
+    "sha256": "bc7d07e888bb20b437b8e22955eb74e5fa433c7667080e80b315ad1ff5d1f62c"
+  }
+}

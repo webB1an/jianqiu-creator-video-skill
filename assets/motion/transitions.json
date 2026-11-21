@@ -1,0 +1,39 @@
+{
+  "page": {
+    "filter": "custom",
+    "seconds": 0.47,
+    "use": "纸页从下方接住一段文件或注释",
+    "axis": "Y/H"
+  },
+  "glide": {
+    "filter": "custom",
+    "seconds": 0.37,
+    "use": "阅读方向从正文移向旁栏或落款",
+    "axis": "X/W"
+  },
+  "focus": {
+    "filter": "fade",
+    "seconds": 0.33,
+    "use": "位置已对准的主体在同一位置更换状态"
+  },
+  "push-left": {
+    "filter": "slideleft",
+    "seconds": 0.37,
+    "use": "相邻面板沿同一横轴交接，保留移动方向"
+  },
+  "push-up": {
+    "filter": "slideup",
+    "seconds": 0.4,
+    "use": "纵向列表或时间轴进入下面一段，维持内容上下顺序"
+  },
+  "desk-rise": {
+    "filter": "spatial",
+    "seconds": 0.7,
+    "use": "读完原件后让它倒成桌面，下一镜的数据图从桌前立起"
+  },
+  "push-through": {
+    "filter": "spatial",
+    "seconds": 0.37,
+    "use": "对准上一镜中的物件推穿，接到与它相关的下一镜"
+  }
+}

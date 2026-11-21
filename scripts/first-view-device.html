@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>首看记录</title>
+<style>
+  :root { color-scheme: dark; font: 16px/1.55 "PingFang SC", system-ui, sans-serif; background: #101714; color: #eeeae0; }
+  body { margin: 0 auto; max-width: 48rem; }
+  video { display: block; width: 100%; max-height: 75svh; background: #000; }
+  section { margin: 1rem; } h1 { font-size: 1.25rem; }
+  form { display: grid; gap: .8rem; }
+  label { display: grid; gap: .2rem; }
+  textarea, input, select, button { font: inherit; color: inherit; background: #1e2924; border: 1px solid #64756a; border-radius: .3rem; padding: .45rem; min-width: 0; }
+  button { background: #e5b572; color: #17201b; cursor: pointer; }
+  #save { margin-top: 1rem; } #save textarea { width: 95%; }
+</style>
+<video id="film" playsinline controls preload="metadata" src="data:video/mp4;base64,<!--FILM-->"></video>
+<section>
+  <h1>首看记录</h1><p><!--QUESTION--></p>
+  <form id="response">
+    <label>观察原话<textarea id="observation" required rows="2"></textarea></label>
+    <!--STORY-FIELDS-->
+    <label>能指出你留意到的片段吗<select id="status" required><option value="">请选择</option><option value="located">能指出</option><option value="uncertain">拿不准</option><option value="missed">没有留意到</option></select></label>
+    <label>是哪处画面或哪段声音<input id="location"></label>
+    <label>片内秒数（记得时填写）<input id="at" type="number" min="0" step="any"></label>
+    <label>记录人<input id="reviewer" required></label>
+    <label>播放设备和声音方式<input id="setup" required placeholder="例如，手机外放、电脑耳机或静音播放"></label>
+    <label>事先看过脚本、早期剪辑或知道预期答案吗<select id="prior" required><option value="">请选择</option><option value="no">没有</option><option value="yes">是</option></select></label>
+    <label>观看或听辨时的限制<input id="limits" required placeholder="例如，中途有打断、回放才辨认出来，也可填没有"></label>
+    <button>保存本次观察</button><output id="hint" aria-live="polite"></output>
+  </form>
+  <div id="save" hidden><p><a id="download" download="first-view.json">下载观察记录</a>，也可以复制下方全文。</p><textarea id="json" rows="4" readonly></textarea></div>
+</section>
+<script>
+  const byId = id => document.getElementById(id);
+  const film = byId('film');
+  byId('status').addEventListener('change', () => { byId('location').required = byId('status').value === 'located'; });
+  byId('at').addEventListener('input', () => byId('at').setCustomValidity(''));
+  let lastURL;
+  byId('response').addEventListener('submit', event => {
+    event.preventDefault();
+    const at = byId('at').valueAsNumber;
+    if (Number.isFinite(at) && !(at >= 0 && at < film.duration)) {
+      byId('at').setCustomValidity('请填写片内秒数');
+      byId('at').reportValidity();
+      return;
+    }
+    const ranges = Array.from({length:film.played.length}, (_, i) => [film.played.start(i), film.played.end(i)]);
+    if (!ranges.some(([start,end]) => end > start)) {
+      byId('hint').textContent = '请先播放视频，再保存观看记录。';
+      return;
+    }
+    byId('hint').textContent = '';
+    const record = {files:{film:'<!--DIGEST-->'}, task_sha256:'<!--TASK-->', reviewer:byId('reviewer').value.trim(),
+      method:'离线首看页，观看者填写的设备与声音方式：' + byId('setup').value.trim(),
+      unbriefed:byId('prior').value === 'no', status:byId('status').value,
+      observation:byId('observation').value.trim(), location:byId('location').value.trim(),
+      limits:byId('limits').value.trim(), played_seconds:ranges};
+    if (byId('playback')) {
+      for (const key of ['main_point', 'viewer_value', 'attention', 'playback']) record[key] = byId(key).value.trim();
+    }
+    if (Number.isFinite(at)) record.at_seconds = at;
+    const content = JSON.stringify(record, null, 2);
+    if (lastURL) URL.revokeObjectURL(lastURL);
+    lastURL = URL.createObjectURL(new Blob([content], {type:'application/json'}));
+    byId('download').href = lastURL;
+    byId('json').value = content;
+    byId('save').hidden = false;
+    byId('download').click();
+  });
+</script>
+</html>

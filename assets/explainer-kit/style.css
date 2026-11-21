@@ -1,0 +1,10 @@
+@font-face {font-family:Shu;src:local("Songti SC Bold"),local("Songti SC"),local("Noto Serif CJK SC")}
+@font-face {font-family:Mi;src:local("STHeitiSC-Medium"),local("Heiti SC Medium"),local("PingFangSC-Medium"),local("PingFang SC Medium"),local("Noto Sans CJK SC");font-weight:100 900}
+@font-face {font-family:Num;src:local("Avenir Next Demi Bold"),local("Avenir Next"),local("Arial");font-weight:100 900}
+@font-face {font-family:Mont;src:local("Avenir Next"),local("Arial");font-weight:100 900}
+html,body {margin:0;background:#131A17;overflow:hidden}
+#stage {width:1920px;height:1080px;position:absolute;overflow:hidden;transform-origin:0 0;background:#131A17;color:#F4EDDD;font-family:Mi,sans-serif;
+  --k-gold1:#fff2d6;--k-gold2:#f1bd85;--k-gold3:#eda961;--k-unit:#f1bd85;--k-cream:#f4eddd;--k-paper:#f4eddd}
+#stage * {box-sizing:border-box}
+.L {position:absolute}.full {position:absolute;inset:0}
+.k-num .w {width:1ch;font-variant-numeric:tabular-nums}

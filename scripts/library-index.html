@@ -1,0 +1,212 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>见秋素材库</title><style>
+*{box-sizing:border-box}body{margin:0;background:#eeede5;color:#202c22;font:16px/1.6 system-ui,sans-serif}main{max-width:1330px;margin:auto;padding:38px 4vw 70px}h1,h2,h3{margin:0;font-family:Georgia,"Songti SC",serif}h1{font-size:clamp(2.4rem,6vw,4.7rem);letter-spacing:-.05em}header{border-top:6px solid #275044;padding-top:12px}nav{display:flex;flex-wrap:wrap;gap:10px;padding:16px 0 22px;border-bottom:1px solid #a1ab98}input[type=search],select{font:inherit;color:inherit;background:#fcfbf6;border:1px solid #929f92;border-radius:4px;padding:8px 11px}input[type=search]{min-width:min(100%,260px)}section{padding-top:26px}h2{font-size:1.35em}h2 small,small{font:13px/1.5 system-ui;color:#4f6056}h2 small{margin-left:8px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:22px;margin:12px 0}.grid article{border-top:2px solid #355947;background:#faf9f4;padding:12px}img,video{object-fit:contain;width:100%;height:145px;background:#16211c}audio{width:100%;height:50px;margin:36px 0}h3{font-size:1.15em;margin-top:7px}p{font-size:14px;margin:.5em 0}details{border-top:1px solid #d9dcd2;margin-top:8px;padding-top:6px;font-size:13px}summary{cursor:pointer}a{color:#285a4a}code{overflow-wrap:anywhere}.empty{color:#667565}body [hidden]{display:none}
+button,textarea{font:inherit}button{background:#275044;color:#fff;border:0;border-radius:4px;padding:6px 12px;cursor:pointer}
+.sample-controls{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;font-size:13px}
+.sample-controls select{max-width:100%;padding:3px 7px}.loop-toggle{accent-color:#275044}
+.prompt textarea{display:block;width:100%;min-height:6em;resize:vertical;padding:8px;margin:.65em 0;border:1px solid #929f92;background:#fcfbf6;color:inherit}
+.copy-status,.visual-terms{color:#365548;font-size:13px}
+.grid article,.mix-part{min-width:0;overflow-wrap:anywhere}
+article:target{outline:2px solid #275044;outline-offset:3px;scroll-margin-top:20px}.reviews ul{padding-left:18px}
+.mix-select{display:block;font-size:14px;margin-top:8px}.mix-choice{accent-color:#275044}
+#mix{border:1px solid #929f92;padding:16px;margin:14px 0;background:#faf9f4}#mix h2{margin:0}
+#mix-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px}
+.mix-part{min-width:0}.mix-part label{display:grid;font-size:14px;gap:3px;margin-top:6px}
+.mix-part input{font:inherit;padding:5px 8px;min-width:0}.mix-part button{font-size:13px;padding:3px 9px;margin-left:6px}
+@media (max-width:600px){nav select{max-width:100%}.sample-view video{height:auto;min-height:110px}}
+</style>
+<main><header><h1>见秋素材库</h1></header>
+<nav aria-label="素材筛选">
+  <input id="q" type="search" aria-label="搜索用途或动作" placeholder="如：机房里有人在查线">
+  <select id="category" aria-label="素材类别"><option value="">全部类别</option><!-- OPTIONS --></select>
+  <select id="visual" aria-label="视觉卡类型"><option value="">全部视觉类型</option><!-- VISUAL OPTIONS --></select>
+  <select id="scope" aria-label="使用条件"><option value="">全部使用条件</option><option value="production">可用于制作</option><option value="editorial">限相关报道使用</option><option value="reference">仅供研习</option></select>
+</nav>
+<details id="online-atlases"><summary>到原站查风格、运镜和用光</summary>
+<p><a href="https://atlas.letz.ai/" target="_blank" rel="noopener noreferrer">LetzAI · 视觉效果图鉴</a>　看图辨认材质、光学和印相效果，查原理与图片署名。</p>
+<p><a href="https://showheyohtaki.github.io/motion-prompt/" target="_blank" rel="noopener noreferrer">大滝昇平 · Motion Prompt</a>　看运动示范，查镜头、灯光及物理动效的专业说法。</p>
+<p><a href="https://lemomo-ai.github.io/lemo-opuscar/zh/" target="_blank" rel="noopener noreferrer">Lemomo · Lemo Opuscar</a>　用钢笔淡彩、皮影或浮世绘的成片与风格说明，比对线条、材质和画面运动。</p>
+</details>
+<aside id="mix" hidden aria-label="混搭草案"><h2>混搭草案</h2>
+<p id="mix-count" role="status"></p><div id="mix-cards"></div>
+<div id="mix-prompt" class="prompt" hidden><label>组合提示词<textarea readonly></textarea></label>
+<button class="copy" type="button">复制组合提示词</button> <span class="copy-status" role="status"></span></div></aside>
+<template id="mix-part"><div class="mix-part">
+<p><a class="card-link"></a><button type="button">移除</button></p>
+<div class="mix-preview"></div><label>从这张卡取用<input type="text"></label>
+</div></template>
+<p id="result" role="status"></p><section id="search-results" hidden><div class="grid"></div></section><!-- CONTENT -->
+</main>
+<script type="application/json" id="search-rules"><!-- SEARCH RULES --></script>
+<script><!-- SEARCH ENGINE --></script>
+<script>
+const query = document.querySelector('#q');
+const category = document.querySelector('#category');
+const scope = document.querySelector('#scope');
+const visual = document.querySelector('#visual');
+const result = document.querySelector('#result');
+const mix = document.querySelector('#mix');
+const mixCards = document.querySelector('#mix-cards');
+const mixPrompt = document.querySelector('#mix-prompt');
+const selectedCards = new Map();
+const typeLabel = {motion: '动效', style: '风格', light: '用光'};
+const scopeLabel = {production: '可用于制作', editorial: '限相关报道使用', reference: '仅供研习'};
+
+const searchEngine = createLibrarySearch(JSON.parse(document.querySelector('#search-rules').textContent));
+const groups = [...document.querySelectorAll('section[data-category]')];
+const searchResults = document.querySelector('#search-results');
+const searchGrid = searchResults.querySelector('.grid');
+const cards = groups.flatMap(group => [...group.querySelectorAll('article')]);
+const homes = new Map(cards.map(card => [card, card.parentElement]));
+const records = new Map(cards.map(card => [card.id, {
+  id: card.id, title: card.dataset.title, keywords: card.dataset.keywords,
+  use: card.dataset.use, text: card.dataset.terms + ' ' +
+    [...card.querySelectorAll('.reviews')].map(panel => panel.textContent).join(' ')
+}]));
+
+function filter() {
+  const words = query.value.trim().split(/\s+/).filter(Boolean);
+  const eligible = cards.filter(card =>
+    (!category.value || category.value === homes.get(card).parentElement.dataset.category) &&
+    (!scope.value || scope.value === card.dataset.scope) &&
+    (!visual.value || visual.value === card.dataset.visual));
+  const ranked = searchEngine.rank(eligible.map(card => records.get(card.id)), words);
+  const visible = new Set(ranked.ids);
+  for (const card of cards) {
+    const show = visible.has(card.id);
+    if (!show && !card.hidden) {
+      for (const media of card.querySelectorAll('video,audio')) media.pause();
+    }
+    card.hidden = !show;
+    if (!words.length) homes.get(card).append(card);
+  }
+  if (words.length) {
+    for (const id of ranked.ids) searchGrid.append(document.getElementById(id));
+  }
+  searchResults.hidden = !words.length || !ranked.ids.length;
+  for (const group of groups) {
+    const categoryMatches = !category.value || category.value === group.dataset.category;
+    const hasResults = [...group.querySelectorAll('article')].some(card => !card.hidden);
+    group.hidden = !!words.length || !categoryMatches ||
+      (!hasResults && !!(scope.value || visual.value));
+  }
+  result.textContent = ranked.ids.length ?
+    (ranked.mode === 'related' ? '按主体和动作找到 ' : '当前 ') + ranked.ids.length + ' 条' :
+    '没有符合条件的素材';
+}
+
+async function copyPrompt(button) {
+  const prompt = button.closest('.prompt').querySelector('textarea');
+  const status = button.parentElement.querySelector('.copy-status');
+  try {
+    await navigator.clipboard.writeText(prompt.value);
+  } catch {
+    prompt.focus();
+    prompt.select();
+    prompt.setSelectionRange(0, prompt.value.length);
+    let copied = false;
+    try { copied = document.execCommand('copy'); } catch {}
+    if (!copied) {
+      status.textContent = '已选中提示词，请用系统复制。';
+      return;
+    }
+  }
+  status.textContent = '已复制提示词';
+}
+
+function updateMix() {
+  const count = selectedCards.size;
+  mix.hidden = !count;
+  mixPrompt.hidden = count !== 2;
+  document.querySelector('#mix-count').textContent = count === 1 ? '再选择一张视觉卡。' : '可分别调整两张卡的用途。';
+  for (const choice of document.querySelectorAll('.mix-choice')) {
+    choice.disabled = count === 2 && !choice.checked;
+    choice.closest('article').querySelector('.mix-jump').hidden = !choice.checked;
+  }
+  if (count !== 2) return;
+  const lines = ['组合草案。用同一主体和画幅重做这两个设计维度。'];
+  for (const [card, part] of selectedCards) {
+    const role = part.querySelector('input').value.trim() || typeLabel[card.dataset.visual];
+    const title = card.querySelector('h3').textContent;
+    lines.push(title + '（' + scopeLabel[card.dataset.scope] + '）取用「' + role + '」。',
+               card.querySelector('.prompt textarea').value);
+  }
+  lines.push('只沿用指定的设计维度。用自有或获准的内容试作，参考卡的原片限于研习。');
+  mixPrompt.querySelector('textarea').value = lines.join('\n\n');
+  mixPrompt.querySelector('.copy-status').textContent = '';
+}
+
+function selectForMix(choice) {
+  const card = choice.closest('article');
+  if (!choice.checked) {
+    const part = selectedCards.get(card);
+    if (part) part.remove();
+    selectedCards.delete(card);
+    updateMix();
+    return;
+  }
+  if (selectedCards.size >= 2) {
+    choice.checked = false;
+    return;
+  }
+  const part = document.querySelector('#mix-part').content.firstElementChild.cloneNode(true);
+  const link = part.querySelector('.card-link');
+  link.href = '#' + card.id;
+  link.textContent = card.querySelector('h3').textContent + '（' + scopeLabel[card.dataset.scope] + '）';
+  const source = card.querySelector('.sample-view:not([hidden])').firstElementChild;
+  part.querySelector('.mix-preview').append(source.cloneNode(true));
+  const roles = {motion: '运动轨迹与时序', light: '光向与明暗', style: selectedCards.size ? '配色与材质' : '构图与层级'};
+  part.querySelector('input').value = roles[card.dataset.visual];
+  part.querySelector('input').addEventListener('input', updateMix);
+  part.querySelector('button').addEventListener('click', () => {
+    choice.checked = false;
+    selectForMix(choice);
+  });
+  selectedCards.set(card, part);
+  mixCards.append(part);
+  updateMix();
+}
+
+document.addEventListener('click', event => {
+  const button = event.target.closest('button.copy');
+  if (button) copyPrompt(button);
+  const link = event.target.closest('a[href^="#"]');
+  if (link && link.hash === location.hash) showLinkedCard();
+});
+document.addEventListener('change', event => {
+  const control = event.target;
+  if (control.matches('.mix-choice')) {
+    selectForMix(control);
+    return;
+  }
+  if (!control.matches('.sample-select,.loop-toggle')) return;
+  const card = control.closest('article');
+  if (control.matches('.loop-toggle')) {
+    for (const video of card.querySelectorAll('video')) video.loop = control.checked;
+    return;
+  }
+  const views = [...card.querySelectorAll('.sample-view')];
+  const oldVideo = card.querySelector('.sample-view:not([hidden]) video');
+  const wasPlaying = oldVideo && !oldVideo.paused;
+  if (oldVideo) oldVideo.pause();
+  for (const [index, view] of views.entries()) view.hidden = index !== control.selectedIndex;
+  const nextVideo = views[control.selectedIndex].querySelector('video');
+  if (wasPlaying && nextVideo) nextVideo.play().catch(() => {});
+  const part = selectedCards.get(card);
+  if (part) part.querySelector('.mix-preview').replaceChildren(views[control.selectedIndex].firstElementChild.cloneNode(true));
+});
+query.addEventListener('input', filter);
+for (const select of [category, scope, visual]) select.addEventListener('change', filter);
+
+function showLinkedCard() {
+  const card = document.getElementById(location.hash.slice(1));
+  if (!card || !card.matches('article')) return;
+  if (card.hidden || card.closest('section').hidden) {
+    for (const input of [query, category, scope, visual]) input.value = '';
+    filter();
+  }
+  card.scrollIntoView({block: 'start'});
+}
+window.addEventListener('hashchange', showLinkedCard);
+filter();
+showLinkedCard();
+</script></html>

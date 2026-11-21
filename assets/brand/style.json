@@ -1,0 +1,12 @@
+{
+  "name": "一叶见秋起", "short": "见秋", "latin": "JIANQIU",
+  "ink": "#131A17", "paper": "#F4EDDD", "amber": "#EDA961", "muted": "#A9AB9F",
+  "card_colors": {
+    "dark": {"background": "ink", "text": "paper", "muted": "muted", "accent": "amber", "compare": "#8AD7CD"},
+    "light": {"background": "paper", "text": "ink", "muted": "#56605A", "accent": "#82501D", "compare": "#176663"}
+  },
+  "card_faces": {"title": ["serif", 1], "label": ["sans", 1], "metric": ["latin", 2]},
+  "serif": "/System/Library/Fonts/Supplemental/Songti.ttc",
+  "sans": "/System/Library/Fonts/STHeiti Medium.ttc",
+  "latin_font": "/System/Library/Fonts/Avenir Next.ttc"
+}

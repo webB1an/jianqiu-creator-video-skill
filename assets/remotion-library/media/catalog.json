@@ -1,0 +1,75 @@
+[
+  {
+    "id": "ken-burns",
+    "name": "实物定点推近",
+    "tags": ["媒体","运镜","档案照片","聚焦","局部放大","推拉","Ken Burns"],
+    "component": "KenBurns",
+    "description": "先看全图，再推近原件上的一个细节。适合照片、示意图或已经拍好的实物镜头。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/ken-burns",
+    "implementation": "本地取景组件复用 Remotion Img、OffthreadVideo、interpolate 与 Easing。",
+    "media": ["source"],
+    "example": {"source":"examples/dial-before.svg","fromZoom":1,"toZoom":1.6,"toFocus":[0.66,0.47]},
+    "parameters": "source 为本地图片或视频。fromZoom、toZoom 是 1–8 倍取景，fromFocus、toFocus 是初始画框内的 [x,y] 比例坐标。fit 可选 cover、contain。sourceStart 用合成帧指定源视频入点。startFrame、endFrame 可将运动区间对齐到镜内帧，前后停住。"
+  },
+  {
+    "id": "image-comparison-slider",
+    "name": "同位对比滑尺",
+    "tags": ["媒体","AB","前后对照","比较滑块","擦除","滑尺","两张图","同位"],
+    "component": "ImageComparison",
+    "description": "保持两份原件的坐标不动，移动分界线，让观众核对同一位置的变化。输入先对齐。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/image-comparison-slider",
+    "implementation": "直接调用 @remotion/transitions 的官方 wipe({direction:'from-left'}) 呈现器，分界线读取同一进度。",
+    "media": ["before","after"],
+    "example": {"before":"examples/dial-before.svg","after":"examples/dial-after.svg","from":0,"to":1,"divider":"#f1c279"},
+    "parameters": "before、after 为相同取景的图片或视频。from、to 为分界线的水平比例（0–1），可反向。fit 默认为 contain，可改 cover。divider 为分界线颜色。视频入点 beforeStart、afterStart 与动作边界 startFrame、endFrame 均按镜内帧率计。"
+  },
+  {
+    "id": "picture-in-picture",
+    "name": "全屏缩入画中画",
+    "tags": ["媒体","人物","画中画","侧窗","小窗","缩窗","PiP"],
+    "component": "PictureInPicture",
+    "description": "前一视角缩进角落继续播放，露出下方全屏原件。可用作人物解说切到操作画面的镜头。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/picture-in-picture",
+    "implementation": "本地构图复用 Remotion 的 Img、OffthreadVideo 与 interpolate；两份素材共用同一镜内时钟。",
+    "media": ["main","insetSource"],
+    "example": {"main":"examples/dial-after.svg","insetSource":"examples/dial-before.svg","corner":"top-right","size":0.36,"aspect":1.4},
+    "parameters": "main 是最后露出的主画面，insetSource 是从全屏缩入角落的素材。corner 取 top-left、top-right、bottom-left、bottom-right。size 为小窗宽与画宽之比（0.1–0.75），aspect 为小窗宽高比，inset 为距边缘的画面短边比例。mainFit、insetFit 可取 cover 或 contain。mainStart、insetStart 为源入点帧；startFrame、endFrame 为缩窗起止帧。下方有字幕时可选上角。"
+  },
+  {
+    "id": "parallax-pan",
+    "name": "前后景视差横移",
+    "tags": ["媒体","运镜","双层","透明前景","视差","横移","纵移","分层运镜"],
+    "component": "ParallaxPan",
+    "description": "以同一机位移动前后两层，前景走得更远。前景需有透明区域，背景需覆盖原先被遮住的区域。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/parallax-pan",
+    "implementation": "本地双层机位复用 Remotion 的 AbsoluteFill、Img、OffthreadVideo 和 Easing。按各层行程预留边缘画幅。",
+    "media": ["back","front"],
+    "example": {"back":"examples/dial-before.svg","front":"examples/foreground.svg","axis":"x","travel":0.1,"farRatio":0.25},
+    "parameters": "back 为完整底图，front 为同画幅的透明前景。axis 取 x 或 y；travel 是前层横移占画宽或纵移占画高的比例（−0.2 至 0.2），正值向右或向下。farRatio 是后层相对行程（0–1）。可用 backStart、frontStart 指定视频入点帧，startFrame、endFrame 指定运动起止帧。"
+  },
+  {
+    "id":"spotlight-reveal",
+    "name":"证据局部聚光",
+    "tags":["媒体","局部聚光","焦点","实物标注","光窗","原件","文件细节"],
+    "component":"SpotlightReveal",
+    "description":"保持原图和小字的位置，移动柔边光窗，从全图收向刻度、原文或实物细节。暗部亮度保留画面来路。",
+    "reference":"https://www.reactvideoeditor.com/remotion-templates/spotlight-reveal",
+    "implementation":"复用 Remotion 的 Img、OffthreadVideo、Easing 和 interpolate。平滑移动 CSS 径向遮光层，媒体仅解码一次。",
+    "media":["source"],
+    "example":{"source":"examples/dial-after.svg","fromFocus":[0.40,0.48],"toFocus":[0.66,0.44],"fromRadius":0.57,"toRadius":0.20,"dim":0.72},
+    "parameters":"source 接图片或视频，fit 默认为 contain，可选 cover；sourceStart 指视频起始帧。fromFocus、toFocus 是画框归一化坐标 [x,y]，fromRadius、toRadius 为画面短边的比例（0.025–1.5）。feather 表示边缘过渡占半径比例（0–0.95），dim 是光窗外压暗程度（0–0.92）。startFrame、endFrame 指定运动区间，停住后继续读原件。"
+  },
+  {
+    "id":"photo-stack",
+    "name":"双图档案叠放",
+    "tags":["媒体","两张照片","档案","相册","照片叠放","实物对比","照片入场"],
+    "component":"PhotoStack",
+    "description":"先落下一张原件，停留片刻，再让第二张进入前层；最后两张同时停稳。横版左右交叠，竖版上下交叠。",
+    "reference":"https://www.reactvideoeditor.com/remotion-templates/photo-stack",
+    "exampleCredit":"示例摄影：NASA / Neil Armstrong、Buzz Aldrin（阿波罗 11 号任务）。",
+    "implementation":"使用 Remotion Sequence 调度两张卡片，spring 驱动各自的落位。媒体组件沿本层时间轴读取原件。",
+    "media":["first","second"],
+    "example":{"first":"examples/as11-40-5903.jpg","second":"examples/as11-40-5878.jpg"},
+    "parameters":"first、second 均可换本地图片或视频。secondAt 指第二张开始出现的镜内帧，可绑定讲到第二件证据的词；entryFrames 控制每张卡片的落位时间。firstFit、secondFit 默认 contain，完整展示原件；可按需改 cover。firstStart、secondStart 用合成帧指定各自的视频入点，第二段从出场才开始播放。"
+  }
+]

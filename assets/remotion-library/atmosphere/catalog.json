@@ -1,0 +1,37 @@
+[
+  {
+    "id":"gradient-shift","name":"沉色渐变背景","tags":["背景","渐变","章节","气氛","色温","片头"],"component":"GradientShift",
+    "description":"章节标题或配音过桥的底层。让两端色温和侧光方向缓慢变化，落定后让文字占据注意力。",
+    "reference":"https://www.reactvideoeditor.com/remotion-templates/gradient-shift","implementation":"复用 Remotion interpolateColors 将起止色插值，Easing 与 interpolate 同步控制 CSS 渐变方向。",
+    "example":{"from":["#143B39","#171B18"],"to":["#172C34","#403124"],"fromAngle":117,"toAngle":153},
+    "parameters":"from、to 各为两个端点颜色。fromAngle、toAngle 单位是度。light 是叠加的侧光颜色，支持带透明度的十六进制色值。startFrame、settleFrame 指定换色起止帧，落定后保持。"
+  },
+  {
+    "id":"grid-pulse","name":"局部信号扩散","tags":["背景","叠层","网格","扩散","信号","定位","脉冲"],"component":"GridPulse",
+    "description":"从指定位置向外传递一圈点阵脉冲。可在实拍的信号灯、按键或示意图节点上对准触发点。",
+    "reference":"https://www.reactvideoeditor.com/remotion-templates/grid-pulse","implementation":"以 Remotion 线性 interpolate 驱动径向波前，根据节点的实际距离逐点控制 SVG 半径与透明度。",
+    "example":{"origin":[0.33,0.52],"columns":18,"color":"#9BC8BE","strength":0.75,"background":"#131A17"},
+    "parameters":"origin 用画幅内的 [x,y] 比例定位，columns 为 4–48 列，strength 为 0–1。transparent 为 true 时输出透明背景以供叠加。background、color 可换色。startFrame、settleFrame 控制脉冲起止帧，扩散完毕后留底纹。"
+  },
+  {
+    "id":"letterbox-reveal","name":"宽银幕上下开幅","tags":["开场","收场","实拍","遮幅","黑边","电影感","展幅"],"component":"LetterboxReveal",
+    "description":"让上下遮幅从中轴打开，显出一张照片或一段实拍。调换起止比例也可作为片尾合幅。",
+    "reference":"https://www.reactvideoeditor.com/remotion-templates/letterbox-reveal","implementation":"复用 Remotion Img、OffthreadVideo、Easing 和 interpolate，按合成帧同步上下遮幅。",
+    "media":["source"],"example":{"source":"@library/media/examples/dial-before.svg","from":0.5,"to":0.065,"fit":"contain"},
+    "parameters":"source 为本地视频或图片。from、to 范围 0–0.5，分别表示开头、结尾的单边遮幅占画面高度的比例。fit 可选 contain 或 cover。sourceStart 是源视频入点的合成帧数。color 为遮幅颜色。startFrame、settleFrame 可对齐画外音或音乐落点。"
+  },
+  {
+    "id":"logo-stroke-draw","name":"标志轮廓描绘","tags":["片头","落版","署名","标志","路径","描边","叠层","品牌"],"component":"LogoStrokeDraw",
+    "description":"遵循提供的标志笔画顺序逐段描边，保留完整轮廓供观众识别。可在已拍好的片尾实物上叠一枚品牌落款。",
+    "reference":"https://www.reactvideoeditor.com/remotion-templates/logo-stroke-draw","implementation":"直接使用 @remotion/paths 的 evolvePath 计算每笔的虚线长度和偏移，用 Remotion Easing 分配时间。",
+    "example":{"viewBox":[0,0,100,100],"paths":["M 22 70 C 20 38 46 22 78 20 C 78 50 58 75 27 74","M 22 80 Q 41 54 65 35"],"size":0.42,"strokeWidth":3,"color":"#F4EDDD"},
+    "parameters":"paths 是已授权标志的 SVG 路径 d 列表，按实际书写或图层顺序提供；示例是一枚原创叶形。viewBox 用 [x,y,width,height]。size 是乘以画面较短边的比例，strokeWidth 使用 SVG 坐标单位。transparent 为 true 可叠到实拍。background、color 可换色。startFrame、settleFrame 控制描线与落版停留。"
+  },
+  {
+    "id":"credits-roll","name":"双栏片尾署名","tags":["片尾","字幕","滚动","署名","鸣谢","演职员","包装"],"component":"CreditsRoll",
+    "description":"职责与姓名并排匀速上行，进入和离开可读区域时淡入淡出，最后一项停在画面中线。",
+    "reference":"https://www.reactvideoeditor.com/remotion-templates/credits-roll","implementation":"复用 Remotion 的线性 interpolate 按帧安排各行位置和边缘透明度，SVG 文字按横竖比缩放。",
+    "example":{"items":[{"role":"内容策划","name":"见秋"},{"role":"画面制作","name":"见秋"},{"role":"资料整理","name":"见秋"}],"spacing":0.135},
+    "parameters":"items 按出场次序填每行 role 和 name，仅使用真实署名。spacing 以画幅高度比例设置行距（0.09–0.24）。color、roleColor、background 支持换色。transparent 为 true 可用于深色实拍。startFrame、settleFrame 控制滚动区间，署名较多时延长镜头及滚动区间。"
+  }
+]

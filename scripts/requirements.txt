@@ -1,0 +1,6 @@
+# Versions used for the tested Python 3.12 production environment
+numpy==2.3.5
+Pillow==13.0.0
+requests==2.34.2
+sherpa-onnx==1.12.39
+jieba==0.42.1

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>逐帧研习</title>
+<style>
+  :root { color-scheme:dark; font-family:"PingFang SC","Microsoft YaHei",sans-serif; background:#121514; color:#f2eee6 }
+  body { max-width:850px; margin:auto; padding:clamp(14px,4vw,44px) }
+  h1 { font-size:clamp(18px,4vw,29px); font-weight:580; overflow-wrap:anywhere }
+  .stage { display:grid; place-items:center; padding:12px; background:#080a09; min-height:200px }
+  canvas { max-width:100%; max-height:65vh; width:auto; height:auto }
+  input,button { font:inherit; accent-color:#e7bd75 }
+  input[type=range] { width:100%; margin:18px 0 }
+  input[type=number] { width:7ch }
+  nav { display:flex; align-items:center; flex-wrap:wrap; gap:10px }
+  button,input[type=number] { background:#202623; color:inherit; border:1px solid #59615a; padding:6px 9px; border-radius:4px }
+  output { display:block; font-variant-numeric:tabular-nums; margin:14px 0 }
+  p { color:#c3c9bd; font-size:14px }
+</style>
+<h1 id="name"></h1>
+<div class="stage"><canvas aria-label="选中的原片帧，等比缩图"></canvas></div>
+<input id="slider" type="range" min="0" value="0" aria-label="浏览整支视频">
+<nav>
+  <button id="prev">← 上一帧</button><button id="next">下一帧 →</button>
+  <label>跳到帧 <input id="jump" type="number" min="0" value="0" step="1"></label>
+</nav>
+<output id="status" aria-live="polite"></output>
+<p>用左右方向键逐帧比较。帧号从 0 起算，时间取自源文件的显示时间戳。图像按比例缩小。</p>
+<script src="frames.js"></script>
+<script>
+  const stage = document.querySelector('canvas');
+  const slider = document.querySelector('#slider');
+  const jump = document.querySelector('#jump');
+  const status = document.querySelector('#status');
+  const previous = document.querySelector('#prev');
+  const next = document.querySelector('#next');
+  const last = film.times.length - 1;
+  const pageSize = film.columns * film.rows;
+  let current = 0;
+  let loadedPage = -1;
+  let sprite;
+  document.querySelector('#name').textContent = film.name;
+  slider.max = jump.max = last;
+  stage.width = film.width;
+  stage.height = film.height;
+
+  function paint() {
+    const slot = current % pageSize;
+    stage.getContext('2d').drawImage(sprite,
+      slot % film.columns * film.width, Math.floor(slot / film.columns) * film.height,
+      film.width, film.height, 0, 0, film.width, film.height);
+    const delta = current ? '　与前帧相隔 ' + ((film.times[current] - film.times[current-1]) * 1000).toFixed(2) + ' ms' : '';
+    status.textContent = 'F' + current + ' / ' + last + '　' + film.times[current].toFixed(6) + ' s' + delta;
+  }
+
+  function show(value) {
+    if (!Number.isFinite(value)) return;
+    current = Math.min(last, Math.max(0, Math.trunc(value)));
+    slider.value = jump.value = current;
+    previous.disabled = current === 0;
+    next.disabled = current === last;
+    const page = Math.floor(current / pageSize);
+    if (page === loadedPage && sprite.complete && sprite.naturalWidth) {
+      paint();
+      return;
+    }
+    if (page === loadedPage) return;
+    loadedPage = page;
+    sprite = new Image();
+    sprite.onload = () => { if (loadedPage === page) paint(); };
+    sprite.onerror = () => { if (loadedPage === page) status.textContent = '无法读取帧图，请检查同目录的 frames 图集。'; };
+    sprite.src = 'frames-' + String(page).padStart(4, '0') + '.jpg';
+  }
+  previous.onclick = () => show(current - 1);
+  next.onclick = () => show(current + 1);
+  slider.oninput = () => show(slider.valueAsNumber);
+  jump.onchange = () => show(jump.valueAsNumber);
+  jump.onkeydown = event => {
+    if (event.key === 'Enter') {
+      show(jump.valueAsNumber);
+      jump.blur();
+    }
+  };
+  window.onkeydown = event => {
+    if (event.target === jump || !['ArrowLeft','ArrowRight'].includes(event.key)) return;
+    event.preventDefault();
+    show(current + (event.key === 'ArrowRight' ? 1 : -1));
+  };
+  show(Number(new URLSearchParams(location.search).get('frame') || 0));
+</script>
+</html>

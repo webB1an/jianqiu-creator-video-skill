@@ -1,0 +1,19 @@
+{
+  "name": "creator-video-remotion-shot",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio index.jsx",
+    "render": "remotion render index.jsx LibraryShot shot.mp4 --codec=h264 --color-space=bt709 --muted"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.543",
+    "@remotion/paths": "4.0.543",
+    "@remotion/player": "4.0.543",
+    "@remotion/shapes": "4.0.543",
+    "@remotion/transitions": "4.0.543",
+    "remotion": "4.0.543",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "esbuild": "0.28.1"
+  }
+}

@@ -1,0 +1,68 @@
+"""Summarize cut lengths and caption timing for the editor's narrative sections."""
+from statistics import median
+
+
+def freeze_cuts(plan, total_frames):
+    """Legacy projects sometimes have only a partial screen plan; use timeline shots then."""
+    cuts = plan.get('cuts', [])
+    cursor = 0
+    frozen = []
+    for cut in cuts:
+        first, last = cut.get('start'), cut.get('end')
+        if type(first) is not int or type(last) is not int or not cursor == first < last <= total_frames:
+            return []
+        row = {'start': first}
+        if 'section' in cut:
+            name = cut['section']
+            if not isinstance(name, str) or not name.strip():
+                raise ValueError(f'Give the section beginning at frame {first} a name')
+            row['section'] = name.strip()
+        cue = cut.get('cue_frame')
+        if type(cue) is int and first <= cue < last:
+            row['cue_frame'] = cue
+        frozen.append(row)
+        cursor = last
+    return frozen if cursor == total_frames else []
+
+
+def measure_sections(timeline, cuts, subs, windows):
+    fps, total = timeline['fps'], timeline['frames']
+    source = 'screen_plan' if cuts else 'timeline_shots'
+    cuts = cuts or [{'start': shot['start_frame']} for shot in timeline['shots']]
+    boundaries = [i for i, cut in enumerate(cuts) if i == 0 or 'section' in cut]
+    rows = []
+    for i, stop in zip(boundaries, boundaries[1:] + [len(cuts)]):
+        group = cuts[i:stop]
+        first = group[0]['start']
+        last = cuts[stop]['start'] if stop < len(cuts) else total
+        starts = [cut['start'] for cut in group]
+        cut_lengths = [b-a for a, b in zip(starts, starts[1:] + [last])]
+        lo, hi = first/fps, last/fps
+        cues = [(a,b) for a,b,_ in subs if a < hi and lo < b]
+        # SRT stores milliseconds. A cue at a 30 fps cut may start at 0.033s.
+        caption_starts = sum(round(lo, 3) <= a < round(hi, 3) for a,b in cues)
+        spans = []
+        for a, b in sorted(cues):
+            a, b = max(a, lo), min(b, hi)
+            if spans and a <= spans[-1][1]:
+                spans[-1] = (spans[-1][0], max(spans[-1][1], b))
+            else:
+                spans.append((a, b))
+        caption_time = sum(b-a for a,b in spans)
+        watched = 0.
+        clear = 0.
+        for window in windows:
+            a, b = max(first, window['start'])/fps, min(last, window['end'])/fps
+            if a < b:
+                watched += b-a
+                covered = sum(max(0., min(b,y) - max(a,x)) for x,y in spans)
+                clear += max(0., b-a-covered)
+        rows.append(dict(
+            section=group[0].get('section'), start_frame=first, end_frame=last,
+            cut_frames=cut_lengths, median_cut_seconds=round(median(cut_lengths)/fps, 3),
+            caption_starts=caption_starts, caption_starts_per_10s=round(10*caption_starts/(hi-lo), 2),
+            caption_coverage_percent=round(100*caption_time/(hi-lo), 1),
+            watch_seconds=round(watched, 3) if watched else None,
+            watch_without_captions_seconds=round(clear, 3) if watched else None,
+            cue_frames=[c['cue_frame'] for c in group if 'cue_frame' in c]))
+    return {'cut_source': source, 'segments': rows}

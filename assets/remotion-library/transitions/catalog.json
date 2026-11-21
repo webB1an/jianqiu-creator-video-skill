@@ -1,0 +1,261 @@
+[
+  {
+    "id": "slide",
+    "name": "双景横推",
+    "tags": [
+      "推拉",
+      "横移",
+      "平移",
+      "换场"
+    ],
+    "component": "Slide",
+    "description": "两幅画面同向移动，在原来的视线方向交给下一处。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/push-transition",
+    "implementation": "@remotion/transitions · slide",
+    "example": {
+      "outgoing": "@library/media/examples/as11-40-5903.jpg",
+      "incoming": "@library/media/examples/as11-40-5878.jpg",
+      "direction": "from-right",
+      "outAnchor": [
+        0.5,
+        0.25
+      ]
+    },
+    "parameters": "outgoing、incoming 指向两段本地素材。outStart、inStart 指定各自的素材入帧，outAnchor、inAnchor 默认居中。atFrame、overlap 分别指定本镜过渡起始帧和重叠帧数。direction 指定来向，可用 from-left、from-right、from-top、from-bottom。",
+    "media": [
+      "outgoing",
+      "incoming"
+    ],
+    "exampleCredit": "示例摄影：NASA / Neil Armstrong、Buzz Aldrin（阿波罗 11 号任务）。"
+  },
+  {
+    "id": "wipe",
+    "name": "边缘擦除",
+    "tags": [
+      "划入",
+      "擦过",
+      "画面揭示",
+      "换景"
+    ],
+    "component": "Wipe",
+    "description": "一条移动边界逐渐露出下一段影像。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/slide-wipe",
+    "implementation": "@remotion/transitions · wipe",
+    "example": {
+      "outgoing": "@library/media/examples/as11-40-5903.jpg",
+      "incoming": "@library/media/examples/as11-40-5878.jpg",
+      "direction": "from-right",
+      "outAnchor": [
+        0.5,
+        0.25
+      ]
+    },
+    "parameters": "outgoing、incoming 指向两段本地素材。outStart、inStart 指定各自的素材入帧，outAnchor、inAnchor 默认居中。atFrame、overlap 分别指定本镜过渡起始帧和重叠帧数。direction 指定来向，可用 from-left、from-right、from-top、from-bottom。",
+    "media": [
+      "outgoing",
+      "incoming"
+    ],
+    "exampleCredit": "示例摄影：NASA / Neil Armstrong、Buzz Aldrin（阿波罗 11 号任务）。"
+  },
+  {
+    "id": "fade",
+    "name": "交叉叠化",
+    "tags": [
+      "淡入淡出",
+      "溶解",
+      "时间流逝",
+      "转场"
+    ],
+    "component": "Fade",
+    "description": "在重叠时段内将上一景溶入下一景。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/cross-dissolve",
+    "implementation": "@remotion/transitions · fade",
+    "example": {
+      "outgoing": "@library/media/examples/as11-40-5903.jpg",
+      "incoming": "@library/media/examples/as11-40-5878.jpg",
+      "outAnchor": [
+        0.5,
+        0.25
+      ]
+    },
+    "parameters": "outgoing、incoming 指向两段本地素材。outStart、inStart 指定各自的素材入帧，outAnchor、inAnchor 默认居中。atFrame、overlap 分别指定本镜过渡起始帧和重叠帧数。",
+    "media": [
+      "outgoing",
+      "incoming"
+    ],
+    "exampleCredit": "示例摄影：NASA / Neil Armstrong、Buzz Aldrin（阿波罗 11 号任务）。"
+  },
+  {
+    "id": "iris",
+    "name": "圆形开窗",
+    "tags": [
+      "圆窗",
+      "光圈",
+      "扩张",
+      "遮罩"
+    ],
+    "component": "Iris",
+    "description": "由画面中央的圆形开口看到下一个对象。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/iris-transition",
+    "implementation": "@remotion/transitions · iris",
+    "example": {
+      "outgoing": "@library/media/examples/as11-40-5903.jpg",
+      "incoming": "@library/media/examples/as11-40-5878.jpg",
+      "outAnchor": [
+        0.5,
+        0.25
+      ]
+    },
+    "parameters": "outgoing、incoming 指向两段本地素材。outStart、inStart 指定各自的素材入帧，outAnchor、inAnchor 默认居中。atFrame、overlap 分别指定本镜过渡起始帧和重叠帧数。",
+    "media": [
+      "outgoing",
+      "incoming"
+    ],
+    "exampleCredit": "示例摄影：NASA / Neil Armstrong、Buzz Aldrin（阿波罗 11 号任务）。"
+  },
+  {
+    "id": "clock-wipe",
+    "name": "时钟扫入",
+    "tags": [
+      "环形",
+      "扫描",
+      "钟面",
+      "顺时针"
+    ],
+    "component": "ClockWipe",
+    "description": "沿钟面扫过一周，前后两种状态依次接替。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/clock-wipe",
+    "implementation": "@remotion/transitions · clock-wipe",
+    "example": {
+      "outgoing": "@library/media/examples/as11-40-5903.jpg",
+      "incoming": "@library/media/examples/as11-40-5878.jpg",
+      "outAnchor": [
+        0.5,
+        0.25
+      ]
+    },
+    "parameters": "outgoing、incoming 指向两段本地素材。outStart、inStart 指定各自的素材入帧，outAnchor、inAnchor 默认居中。atFrame、overlap 分别指定本镜过渡起始帧和重叠帧数。",
+    "media": [
+      "outgoing",
+      "incoming"
+    ],
+    "exampleCredit": "示例摄影：NASA / Neil Armstrong、Buzz Aldrin（阿波罗 11 号任务）。"
+  },
+  {
+    "id": "flip",
+    "name": "卡面翻转",
+    "tags": [
+      "翻牌",
+      "翻页",
+      "卡片",
+      "正反面"
+    ],
+    "component": "Flip",
+    "description": "让正反两面在一次立体翻转里交换。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/card-flip",
+    "implementation": "@remotion/transitions · flip",
+    "example": {
+      "outgoing": "@library/media/examples/as11-40-5903.jpg",
+      "incoming": "@library/media/examples/as11-40-5878.jpg",
+      "direction": "from-right",
+      "outAnchor": [
+        0.5,
+        0.25
+      ]
+    },
+    "parameters": "outgoing、incoming 指向两段本地素材。outStart、inStart 指定各自的素材入帧，outAnchor、inAnchor 默认居中。atFrame、overlap 分别指定本镜过渡起始帧和重叠帧数。direction 指定来向，可用 from-left、from-right、from-top、from-bottom。",
+    "media": [
+      "outgoing",
+      "incoming"
+    ],
+    "exampleCredit": "示例摄影：NASA / Neil Armstrong、Buzz Aldrin（阿波罗 11 号任务）。"
+  },
+  {
+    "id": "cube",
+    "name": "立方翻面",
+    "tags": [
+      "转面",
+      "空间",
+      "转台",
+      "三维"
+    ],
+    "component": "Cube",
+    "description": "前后两景落在相邻立面上，沿共同棱边换景。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/card-flip",
+    "implementation": "@remotion/transitions · cube",
+    "example": {
+      "outgoing": "@library/media/examples/as11-40-5903.jpg",
+      "incoming": "@library/media/examples/as11-40-5878.jpg",
+      "direction": "from-right",
+      "outAnchor": [
+        0.5,
+        0.25
+      ]
+    },
+    "parameters": "outgoing、incoming 指向两段本地素材。outStart、inStart 指定各自的素材入帧，outAnchor、inAnchor 默认居中。atFrame、overlap 分别指定本镜过渡起始帧和重叠帧数。direction 指定来向，可用 from-left、from-right、from-top、from-bottom。",
+    "media": [
+      "outgoing",
+      "incoming"
+    ],
+    "exampleCredit": "示例摄影：NASA / Neil Armstrong、Buzz Aldrin（阿波罗 11 号任务）。"
+  },
+  {
+    "id": "push-cut",
+    "name": "推近切换",
+    "tags": [
+      "冲切",
+      "推穿",
+      "冲击",
+      "推镜",
+      "转场"
+    ],
+    "component": "PushCut",
+    "description": "对准主体推近，在运动中切入下一景。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/zoom-through",
+    "implementation": "@remotion/transitions · push-cut",
+    "example": {
+      "outgoing": "@library/media/examples/as11-40-5903.jpg",
+      "incoming": "@library/media/examples/as11-40-5878.jpg",
+      "outAnchor": [
+        0.5,
+        0.25
+      ]
+    },
+    "parameters": "outgoing、incoming 指向两段本地素材。outStart、inStart 指定各自的素材入帧，outAnchor、inAnchor 默认居中。atFrame、overlap 分别指定本镜过渡起始帧和重叠帧数。",
+    "media": [
+      "outgoing",
+      "incoming"
+    ],
+    "exampleCredit": "示例摄影：NASA / Neil Armstrong、Buzz Aldrin（阿波罗 11 号任务）。"
+  },
+  {
+    "id": "focus-pair",
+    "name": "双源分屏取景",
+    "tags": [
+      "分屏",
+      "左右",
+      "同框",
+      "对照",
+      "全屏"
+    ],
+    "component": "FocusPair",
+    "description": "先并排看两份原件，再向与口播相关的一侧连续取景。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/split-screen",
+    "implementation": "见秋已有 Remotion 合成 EvidenceCut",
+    "example": {
+      "outgoing": "@library/media/examples/as11-40-5903.jpg",
+      "incoming": "@library/media/examples/as11-40-5878.jpg",
+      "side": "left",
+      "outAnchor": [
+        0.5,
+        0.25
+      ]
+    },
+    "parameters": "outgoing、incoming 指向两段本地素材。outStart、inStart 指定各自的素材入帧，outAnchor、inAnchor 默认居中。startFrame、endFrame 为取景的起落帧，side 选择 left 或 right。",
+    "media": [
+      "outgoing",
+      "incoming"
+    ],
+    "exampleCredit": "示例摄影：NASA / Neil Armstrong、Buzz Aldrin（阿波罗 11 号任务）。"
+  }
+]

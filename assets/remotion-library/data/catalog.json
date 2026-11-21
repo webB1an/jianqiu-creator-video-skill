@@ -1,0 +1,57 @@
+[
+  {
+    "id": "stat-counter",
+    "name": "数字滚动落定",
+    "tags": ["数据", "计数", "累计", "金额", "单一指标", "数字滚动", "里程碑"],
+    "component": "StatCounter",
+    "description": "将一个累计值从起点滚到本期准确终值，末段留给观众核对单位。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/stat-counter",
+    "implementation": "本地数据排版调用 Remotion interpolate / Easing，落稳帧直接显示原始终值。",
+    "example": {"title": "三笔报销合计", "from": 280, "to": 420, "unit": "元"},
+    "parameters": "to 为有限终值，from 默认为 0。title、unit、color、decimals 可选。startFrame 和 settleFrame 是镜内开始、落稳帧；默认从首帧开始，在约 69% 处停稳。"
+  },
+  {
+    "id": "bar-chart",
+    "name": "同尺度横条比较",
+    "tags": ["数据", "对比", "条形图", "柱状图", "条图", "排名", "正负", "两组"],
+    "component": "BarChart",
+    "description": "各行沿同一条零轴伸展，保留正负方向和统一刻度，行末列出原值。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/chart-animation",
+    "implementation": "本地共用零轴和见秋排版，Remotion interpolate 根据每行真实数值求长度与入场进度。",
+    "example": {"title": "两次读取耗时", "unit": "秒", "items": [{"label": "首次读取", "value": 9.2}, {"label": "再次读取", "value": 3.4}]},
+    "parameters": "items 传 1–6 行，每行含 label、数值 value 和可选 color。title、unit、decimals、startFrame、settleFrame 可选。"
+  },
+  {
+    "id": "line-chart",
+    "name": "实测趋势折线",
+    "tags": ["数据", "趋势", "折线图", "时间序列", "按时间变化", "走势", "描线"],
+    "component": "LineChart",
+    "description": "沿原始观测点连成的折线逐步描出走势，保留负值、首尾刻度和单位。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/line-chart",
+    "implementation": "使用 @remotion/paths 的 evolvePath，配合 Remotion interpolate 映射真实横纵坐标。",
+    "example": {"title": "设备温度", "unit": "℃", "items": [{"x": 0, "label": "0 秒", "value": 21}, {"x": 2, "label": "2 秒", "value": 28}, {"x": 7, "label": "7 秒", "value": 26}, {"x": 12, "label": "12 秒", "value": 34}]},
+    "parameters": "items 传 2–240 个 label、value 点。各点给单调递增的数值 x 可保留非等间隔；省略全部 x 时等距。首尾 label 上屏。title、unit、color、decimals、startFrame、settleFrame 可选。"
+  },
+  {
+    "id": "donut-chart",
+    "name": "构成占比环",
+    "tags": ["数据", "占比", "构成", "圆环", "环形图", "百分比", "比例", "饼图"],
+    "component": "DonutChart",
+    "description": "各部分按同一分母依次展开，同时保留中心合计与图例百分比。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/donut-chart",
+    "implementation": "复用 @remotion/shapes 的 makePie 生成各段精确圆弧，用 Remotion interpolate 驱动依次展开。",
+    "example": {"title": "这批样本的构成", "unit": "份", "items": [{"label": "已核对", "value": 42}, {"label": "待核对", "value": 18}, {"label": "需补录", "value": 10}]},
+    "parameters": "items 传 1–6 个互斥类别，每项含 label、非负 value 和可选 color。总量须大于 0。title、unit、decimals（总量读数）、startFrame、settleFrame 可选。"
+  },
+  {
+    "id": "progress-steps",
+    "name": "步骤交接与卡词",
+    "tags": ["流程", "步骤", "进度", "工序", "状态变化", "节点", "逐项揭示"],
+    "component": "ProgressSteps",
+    "description": "提前交代流程全貌，连线向下一步伸展，在该步的口播落点切换状态。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/progress-steps",
+    "implementation": "Remotion useCurrentFrame 和 interpolate 读取步骤帧与连线进度，标签沿共享时间线排版。",
+    "example": {"title": "一个包裹如何入站", "steps": ["包裹到站", "站内扫码入库", "系统发出取件码"]},
+    "parameters": "steps 是 2–6 个步骤名称。可用等长、逐个不早于前一项的 cues 帧号数组指定实际动作或实读帧；省略时在 startFrame 与 settleFrame 间均分。title、color 可选。"
+  }
+]

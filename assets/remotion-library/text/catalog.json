@@ -1,0 +1,127 @@
+[
+  {
+    "id": "chapter-title",
+    "name": "章节标题",
+    "tags": [
+      "章节",
+      "分段",
+      "标题",
+      "段落",
+      "开场",
+      "章节卡"
+    ],
+    "component": "ChapterTitle",
+    "description": "全屏章节卡。短题签与细线先定位置，主标题从遮罩下露出，停稳后可读。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/chapter-title",
+    "implementation": "见秋章节排版，调用 remotion 的 interpolate / Easing.cubic。",
+    "example": {
+      "kicker": "观察记录",
+      "title": "同一格里的两种答案"
+    },
+    "parameters": "title 为标题，kicker 可选。theme 取 dark（默认）或 light，accent 自定强调色。"
+  },
+  {
+    "id": "lower-third",
+    "name": "人物身份条",
+    "tags": [
+      "人物",
+      "人名",
+      "职务",
+      "角标",
+      "下三分之一",
+      "采访",
+      "名字条"
+    ],
+    "component": "LowerThird",
+    "description": "透明叠加。身份卡从画面左侧进入，姓名先定位，职务随后出现，下方留出字幕区。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/lower-third",
+    "implementation": "见秋人物条，调用 remotion 的 spring、interpolate。",
+    "example": {
+      "name": "见秋",
+      "role": "视频讲述"
+    },
+    "parameters": "name 为姓名，role 为可选身份。theme 取 dark 或 light，accent 设置竖线颜色，background 可指定整幅底色，默认透明。"
+  },
+  {
+    "id": "text-highlight",
+    "name": "原句分段划亮",
+    "tags": [
+      "原文",
+      "关键词",
+      "原句",
+      "下划线",
+      "划重点",
+      "字幕",
+      "卡词",
+      "高亮"
+    ],
+    "component": "TextHighlight",
+    "description": "全屏文字卡。整句从首帧可读，各段下划线按镜内帧号画出，已划的重点持续保留。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/text-highlight",
+    "implementation": "见秋引文排版，使用 remotion.interpolate 控制各段的划线进度。",
+    "example": {
+      "segments": [
+        "先看",
+        {
+          "text": "合计格",
+          "at": 4
+        },
+        "，再核对",
+        {
+          "text": "最后一行",
+          "at": 16
+        },
+        "。"
+      ],
+      "source": "操作提示",
+      "theme": "light"
+    },
+    "parameters": "segments 按原句顺序填写。常规片段写字符串，需划亮的写 {text,at}，at 为含首帧 0 的镜内帧号。source 是可选出处，theme 取 dark 或 light，accent 为划线颜色。"
+  },
+  {
+    "id": "quote-card",
+    "name": "引语与署名",
+    "tags": [
+      "引语",
+      "引言",
+      "引用",
+      "人物原话",
+      "档案",
+      "金句",
+      "摘录"
+    ],
+    "component": "QuoteCard",
+    "description": "全屏引语卡。引号就位后显出引文，再带出作者或出处，给后半段留足读句时间。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/quote-card",
+    "implementation": "见秋引文卡，调用 remotion 的 interpolate / Easing.cubic。",
+    "example": {
+      "quote": "先把两张图放到同一个刻度上，再看它们差了多少。",
+      "credit": "见秋 · 排版示例"
+    },
+    "parameters": "quote 为实际原话，credit 为说话者或文献出处。theme 取 dark 或 light，accent 为引号颜色。"
+  },
+  {
+    "id": "end-card",
+    "name": "结尾回扣",
+    "tags": [
+      "收尾",
+      "片尾",
+      "回扣",
+      "结论",
+      "落版",
+      "结束",
+      "收获"
+    ],
+    "component": "EndCard",
+    "description": "全屏片尾。在横版左右、竖版上下分别放落点与观众能带走的一句话，片尾稳定可读。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/end-card",
+    "implementation": "见秋收尾版式，用 remotion.interpolate 分次显出结论与读法。",
+    "example": {
+      "title": "下次核账",
+      "takeaway": "先看求和范围停在哪一行。",
+      "credit": "见秋",
+      "theme": "light"
+    },
+    "parameters": "title 写回到的事物或结果，takeaway 写本片能支持的一句话，credit 可填作者。theme 取 dark 或 light，accent 是分隔线颜色。"
+  }
+]

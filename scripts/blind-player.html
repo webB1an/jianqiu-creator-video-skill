@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>两版原速对照</title>
+<style>
+  :root { color-scheme: dark; font-family: "PingFang SC", system-ui, sans-serif; background: #131a17; color: #f4eddd; }
+  body { max-width: 64rem; padding: 1.1rem; margin: 0 auto; }
+  h1 { font-size: 1.5rem; } p { line-height: 1.65; }
+  video { width: 100%; max-height: 64vh; display: block; background: #090b0a; }
+  nav { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1rem 0; }
+  button { border: 1px solid #516057; background: #202a24; color: inherit; padding: .6rem 1rem; border-radius: .35rem; cursor: pointer; font: inherit; }
+  button[aria-pressed="true"] { color: #131a17; background: #eda961; border-color: #eda961; }
+  output { color: #bbc5bd; }
+</style>
+<main>
+  <h1>两版原速对照</h1>
+  <p><!--QUESTION--></p>
+  <video id="player" src="A.mp4" playsinline preload="metadata" controls aria-label="匿名版本 A"></video>
+  <nav aria-label="播放对照">
+    <button id="start-A" aria-pressed="true">从头播放 A</button>
+    <button id="start-B" aria-pressed="false">从头播放 B</button>
+    <button id="switch">同一时刻切换版本</button>
+    <button id="replay">回听前三秒</button>
+  </nav>
+  <output id="status" aria-live="polite">A · 点击播放，默认原声 1 倍速</output>
+</main>
+<script>
+  const video = document.getElementById('player');
+  const status = document.getElementById('status');
+  let current = 'A';
+  let request = 0;
+
+  async function play(label, time) {
+    const ticket = ++request;
+    video.pause();
+    current = label;
+    video.setAttribute('aria-label', '匿名版本 ' + label);
+    for (const version of ['A', 'B']) {
+      document.getElementById('start-' + version).setAttribute('aria-pressed', String(label === version));
+    }
+    if (video.getAttribute('src') !== label + '.mp4') video.src = label + '.mp4';
+    try {
+      if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
+        await new Promise((resolve, reject) => {
+          const finish = e => {
+            video.removeEventListener('loadedmetadata', finish);
+            video.removeEventListener('error', finish);
+            e.type === 'error' ? reject(new Error('无法读取视频')) : resolve();
+          };
+          video.addEventListener('loadedmetadata', finish);
+          video.addEventListener('error', finish);
+        });
+      }
+      if (ticket !== request) return;
+      const target = Math.min(time, Math.max(0, video.duration - .04));
+      if (Math.abs(video.currentTime - target) > .005) video.currentTime = target;
+      video.defaultPlaybackRate = video.playbackRate = 1;
+      await video.play();
+      if (ticket === request) status.textContent = label + ' · 原速播放';
+    } catch (error) {
+      if (ticket === request) status.textContent = label + ' · ' + error.message + '，可用视频控件重试';
+    }
+  }
+  for (const label of ['A', 'B']) document.getElementById('start-' + label).onclick = () => play(label, 0);
+  document.getElementById('switch').onclick = () => play(current === 'A' ? 'B' : 'A', video.currentTime);
+  document.getElementById('replay').onclick = () => play(current, Math.max(0, video.currentTime - 3));
+  video.addEventListener('ended', () => { status.textContent = current + ' · 已播完'; });
+  video.addEventListener('ratechange', () => { status.textContent = current + ' · ' + video.playbackRate + ' 倍速'; });
+</script>
+</html>

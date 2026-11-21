@@ -1,0 +1,4 @@
+interface:
+  display_name: "见秋视频导演"
+  short_description: "从一句话制作横屏解说视频，组织团队独立审片、按镜头返修并签发成片"
+  default_prompt: "用 $creator-video 把我的主题做成一条见秋风格的 16:9 视频，自动选材、配音和剪辑，经团队审片与定点修改后交付。"

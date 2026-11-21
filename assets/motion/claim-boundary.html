@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=960, height=540">
+<script src="gsap.min.js"></script>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:960px;height:540px;overflow:hidden;background:#1a1c1a;color:#f8f1df;font-family:system-ui,sans-serif}
+#story{width:960px;height:540px;position:relative;background:linear-gradient(155deg,#2b322f,#111716)}
+#rule{position:absolute;top:110px;left:64px;width:832px;height:2px;background:#bca17a;transform-origin:left}
+.row{position:absolute;left:64px;right:64px;height:91px;display:flex;align-items:baseline;gap:25px;overflow:hidden}
+#first{top:148px}#second{top:275px}
+.tag{width:162px;flex-shrink:0;color:#d3b58d;font-size:23px;font-weight:600}
+.copy{font-size:34px;line-height:1.35;font-weight:650;letter-spacing:-.025em}
+#first:after{content:"";position:absolute;bottom:0;left:0;right:0;border-bottom:1px solid #63716c}
+</style></head>
+<body>
+<main id="story" data-composition-id="ClaimBoundary" data-start="0" data-duration="__DURATION__" data-width="960" data-height="540" data-fps="30">
+ <div id="rule" class="clip" data-start="0" data-duration="__DURATION__" data-track-index="0"></div>
+ <div class="row clip" id="first" data-start="0" data-duration="__DURATION__" data-track-index="1"><span class="tag">__LABEL1__</span><span class="copy">__COPY1__</span></div>
+ <div class="row clip" id="second" data-start="0" data-duration="__DURATION__" data-track-index="2"><span class="tag">__LABEL2__</span><span class="copy">__COPY2__</span></div>
+</main>
+<script>
+const tl = gsap.timeline({paused:true});
+tl.fromTo('#rule',{scaleX:0},{scaleX:1,duration:0.42,ease:'power3.out'},0);
+tl.fromTo('#first',{opacity:0,y:20},{opacity:1,y:0,duration:0.36,ease:'power3.out'},0.1);
+tl.fromTo('#second',{opacity:0,y:20},{opacity:1,y:0,duration:0.36,ease:'power3.out'},__REVEAL__);
+tl.to({}, {duration:0.01}, __TAIL__);
+window.__timelines = window.__timelines || {};
+window.__timelines.ClaimBoundary = tl;
+tl.seek(0);
+</script>
+</body></html>
