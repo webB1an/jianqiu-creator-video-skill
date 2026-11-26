@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "tech-investigation",
+  "name": "科技实测与悬疑推进（104 BPM · A 小调）",
+  "bpm": 104,
+  "key": "A minor",
+  "mood": "investigative, curious, documentary",
+  "loop_seconds": 9.2308,
+  "license": "CC0 1.0 (arranged from verified CC0 samples in assets/instruments/sources.json)",
+  "stems": {
+    "pad": "pad.wav",
+    "piano": "piano.wav",
+    "bass": "bass.wav",
+    "percussion": "percussion.wav"
+  }
+}

@@ -112,7 +112,7 @@ def adopt(receipt_path, plan_path, version, pins, guide_dir=None):
         path = (plan_path.parent / cut['visual']).resolve(strict=True)
         pins.expect(path, row['sha256'])
         shot = dict(originals.get(key, {'id':key, 'lines':[]}))
-        live_effect = 'remotion_effect' in shot or 'explainer_scene' in shot
+        live_effect = any(key in shot for key in ('remotion_effect', 'explainer_scene', 'parallax_25d'))
         if live_effect:
             if Path(shot['visual']).resolve() != path or cut.get('in', 0):
                 raise ValueError(f'{key}: keep a live effect at its own frame zero or use an independent rendered source')
@@ -163,6 +163,10 @@ def adopt(receipt_path, plan_path, version, pins, guide_dir=None):
     metadata['selection'] = dict(version=version, receipt=os.path.relpath(receipt_path),
                                  receipt_sha256=pins.hashes[pins.key(receipt_path)], preview_sha256=selected['sha256'])
     edit.update(shots=[*edit['shots'][:first], *new, *edit['shots'][last:]], picture_edit=metadata)
+    # The selected intervals now define the picture cuts, including any offsets already in the source assembly.
+    for shot in edit['shots']:
+        for key in ('j_cut', 'l_cut', 'cut_offset'):
+            shot.pop(key, None)
     align_picture(edit, timing['frames'], fps)
     pins.verify()
     atomic_json(edit_path, edit)

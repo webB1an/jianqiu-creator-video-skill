@@ -26,6 +26,10 @@ python3 "$SK/scripts/library.py" search --category continuity --json
 python3 "$SK/scripts/library.py" use broll-paper-turn --project videos/本期
 python3 "$SK/scripts/library.py" use evidence-nvda-filing --purpose editorial --project videos/本期
 python3 "$SK/scripts/library.py" search --scope reference 镜头
+# 视觉特征 + 语义向量级 B-roll 索引与按情绪/潜台词/景别匹配（远/中/微距交替）
+"$PY" "$SK/scripts/library.py" index-visual
+"$PY" "$SK/scripts/library.py" semantic-search "机房代码高速编译验证的精密感" --top 5
+"$PY" "$SK/scripts/semantic_broll.py" plan-sequence videos/本期/edit.json
 ```
 
 项目会收到 assets/library/资产ID/ 里原名的主文件、分轨或工程附件，以及项目根目录的 library-uses.json。剪辑直接读取这些文件。每条使用记录包含素材版本、作用范围、原始权利与入出点。默认检索面向制作与符合条件的报道；研究须显式查询 reference，CLI 拒绝将参考片提取到正片。对报道专用材料阅读原条款后使用 --purpose editorial。

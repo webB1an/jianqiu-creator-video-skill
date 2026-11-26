@@ -17,6 +17,6 @@
 }
 ```
 
-`captions_px` 依次是画布上字幕区的左边、右边、下边及字号，可按平台界面实测改动。运行 `python scripts/portrait_cut.py 本期/vertical/plan.json --out 本期/vertical/portrait.mp4`。脚本共用见秋浮动字幕，按母版帧数封装画面并拷贝其原音轨。每个输入镜头都要是已经编排好的正方形像素 9:16 画面。竖版属于独立候选，交付前在实际观看宽度核对切点前后的同一主体、可读信息和遮挡，记录本次看的是缩小的导出文件、设备本机，还是平台转码稿。
+`captions_px` 依次是画布上字幕区的左边、右边、下边及字号，可按平台界面实测改动。计划顶层与单镜还支持 `caption_style`（`editorial`/`clean-shadow`/`plate`/`plain`）、`caption_highlights`（关键词高亮）、`brand: true`（叠加见秋角标）、`grade` 与 `finish`（风格预设/暗角/颗粒/锐化/LUT），以及单镜 `camera`/`camera_drift` 亚像素运镜，使竖屏与横屏保持统一视听质感。运行 `python scripts/portrait_cut.py 本期/vertical/plan.json --out 本期/vertical/portrait.mp4`。脚本共用见秋浮动字幕，按母版帧数封装画面并拷贝其原音轨。默认输入为单独编排的正方形像素 9:16 画面。对于横屏原件，可在计划顶层填 `"auto_focus": true`。动态视频逐镜跟踪主体，遇到明显的横向跳变时检查实际切点；静图按焦点裁切。需要固定构图时，单镜用 `"crop_focus": [0.65, 0.48]` 指定归一化中心。竖版属于独立候选，交付前在实际观看宽度核对切点前后的同一主体、可读信息和遮挡，记录本次看的是缩小的导出文件、设备本机，还是平台转码稿。
 
 竖版的字幕避让按竖构图重新填写。每镜可填写 `caption_avoid` 和人工 `caption_position`。横版和重排后的竖版分别量各自画面中的证据、脸和包装位置。例中字幕的下方区域由 `captions_px` 固定。若上方也要避开平台栏，可在计划顶层填 `"captions_top_px":200` 指定上带起点。跨越剪点的普通字幕会先按完整起止区间择位，再逐镜合成。[字幕保护区域](presentation.md)

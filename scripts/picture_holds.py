@@ -108,35 +108,44 @@ def select_picture_holds(shots, fps, captions, *, takes=None, components=(), win
 
 
 def planned_quiet_spans(shot, timing, timeline):
-    """Estimate still intervals on the programme clock from the same layer poses used by export."""
+    """Estimate still intervals on the programme clock from the same camera & layer poses used by export."""
     from transitions import STILLS
     if Path(shot.get('visual', '')).suffix.lower() not in STILLS:
         return []
     start, frames = timing['start_frame'], timing['frames']
-    if not shot.get('motion_layers'):
-        return [dict(start_frame=start, end_frame=start+frames)]
+    has_layers = bool(shot.get('motion_layers'))
+    has_camera = 'camera' in shot or 'camera_drift' in shot
+    if not has_layers and not has_camera:
+        return [dict(start_frame=start, end_frame=start + frames)]
 
-    from motion_layers import parse, parse_camera, project_pose, resolve_shot
-    shot = resolve_shot(shot, timeline, timing)
-    layers, camera = parse(shot, frames), parse_camera(shot, frames)
+    import motion_layers
+    import shot_camera
+
+    resolved = motion_layers.resolve_shot(shot, timeline, timing) if has_layers else shot
+    resolved = shot_camera.resolve_shot(resolved, timeline, timing) if has_camera else resolved
+    layers = motion_layers.parse(resolved, frames) if has_layers else []
+    layer_cam = motion_layers.parse_camera(resolved, frames) if has_layers else None
+    plate_cam = shot_camera.parse(resolved, frames) if has_camera else None
+
     def appearance(frame):
-        view = camera.view(frame) if camera else None
+        plate = tuple(round(v, 5) for v in plate_cam.pose(frame)) if plate_cam else None
+        view = layer_cam.view(frame) if layer_cam else None
         poses = []
         for layer in layers:
             pose = layer.pose(frame)
             # A hidden sprite can still have changing coordinates or an active camera.
             visible = pose is not None and pose[3] > 0 and pose[5] > 0
-            poses.append(project_pose(pose, view, layer.depth) if visible else None)
-        return poses
+            poses.append(motion_layers.project_pose(pose, view, layer.depth) if visible else None)
+        return (plate, tuple(poses))
 
     spans = []
     first, previous = 0, appearance(0)
     minimum = max(2, math.ceil(.6 * timeline['fps']))
-    for frame in range(1, frames+1):
+    for frame in range(1, frames + 1):
         current = appearance(frame) if frame < frames else None
         if current != previous:
-            if frame-first >= minimum or (first == 0 and frame == frames):
-                spans.append(dict(start_frame=start+first, end_frame=start+frame))
+            if frame - first >= minimum or (first == 0 and frame == frames):
+                spans.append(dict(start_frame=start + first, end_frame=start + frame))
             first, previous = frame, current
     return spans
 

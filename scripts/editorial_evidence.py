@@ -4,6 +4,7 @@ import json
 import re
 
 import story_review
+from prosody_markup import parse_prosody_markup
 
 FIELDS = {
     'opening': ('promise', 'first_reveal'),
@@ -78,19 +79,22 @@ def surface_targets(project, edit, timing, overlays):
 
     spoken_sections = {s['id']: (s['start_frame'], s['start_frame'] + s['frames'])
                        for s in timing.get('narration_sections', [])}
+    spoken_sections.update({s['id']: (s['audio_start_frame'], s['audio_start_frame'] + s['audio_frames'])
+                            for s in timing.get('shots', []) if 'audio_start_frame' in s})
     spoken_lines = {}
     if spoken_sections:
         fps = timing['fps']
-        for take in timing['voice_takes']:
+        for take in timing.get('voice_takes', []):
             rate = take['sample_rate']
             start = take['start_sample'] * fps // rate
             end = min(total, (take['end_sample'] * fps + rate - 1) // rate)
             spoken_lines.setdefault(take['shot'], []).append((start, end))
     for shot in edit.get('shots', []):
         for i, line in enumerate(shot.get('lines', [])):
-            text = line['text']
-            spoken = line.get('spoken', text)
-            window = spoken_lines[shot['id']][i] if spoken_sections else windows[shot['id']]
+            text = parse_prosody_markup(line['text'])['clean_text']
+            spoken = parse_prosody_markup(line['spoken'])['clean_text'] if 'spoken' in line else text
+            takes = spoken_lines.get(shot['id'], [])
+            window = takes[i] if i < len(takes) else spoken_sections.get(shot['id'], windows[shot['id']])
             if QUANTITY.search(spoken):
                 add(f"voice/{shot['id']}/{i}", 'narration', spoken, window)
             if spoken != text and QUANTITY.search(text):

@@ -30,8 +30,12 @@ def cue_sample(row, edit, timeline, timing, pin=Path):
     else:
         at = row['at']
         if isinstance(at, str):
-            frame = resolve_frame(at, timeline, timing)
-            return round((timing['start_frame'] + frame + shift) * RATE / fps)
+            picture = timing['start_frame']
+            voice = timing.get('audio_start_frame', picture)
+            start = min(picture, voice)
+            end = max(picture + timing['frames'], voice + timing.get('audio_frames', timing['frames']))
+            frame = resolve_frame(at, timeline, dict(start_frame=start, frames=end - start))
+            return round((start + frame + shift) * RATE / fps)
         elif isinstance(at, dict) and set(at) == {'source_frame'}:
             from action_takes import source
             shot = next(s for s in edit['shots'] if s['id'] == timing['id'])

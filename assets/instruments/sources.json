@@ -33,5 +33,53 @@
     "license_page": "https://github.com/facebookincubator/Meta-open-sound/blob/514c926efecdb3c7812bf00eedf8e5c8d61dd681/systems/instruments/meta-nylon-guitar/LICENSE",
     "original_sha256": "bdccb28f3c24422351d9f8aece2c53efbb8b8ef69df571457aadc6612a882d9d",
     "sha256": "bc7d07e888bb20b437b8e22955eb74e5fa433c7667080e80b315ad1ff5d1f62c"
+  },
+  "piano": {
+    "source": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Chordophones/Zithers/Upright%20Piano%2C%20Knight/Sustains/Player_vl1_rr1_A3.wav",
+    "license": "CC0 1.0",
+    "license_page": "https://github.com/sgossner/VCSL/blob/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/LICENSE",
+    "original_sha256": "a00ae1a2b2a78c154b067a9709afc1ce2d3be9f08d9f4ad3c9c869a7db80eb75",
+    "sha256": "d29ecc148a6b3532f0e1206bbaef58746e965b54eb74c8b9b9e9bbaef86d14bf",
+    "pitch_shift_semitones": 0
+  },
+  "pad": {
+    "source": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Aerophones/Edge-blown%20Aerophones/Pipe%20Organ/Quiet/NT5_Man3Quiet_A2_rr1.wav",
+    "license": "CC0 1.0",
+    "license_page": "https://github.com/sgossner/VCSL/blob/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/LICENSE",
+    "original_sha256": "c39ec6c7e26dee6a3661e54a96c4a2a04bce08130864244458a7db1b627b3c93",
+    "sha256": "c8fab1520777fbc23a5b7a3592245dac2624b29f06a89d9c132ea1819b6bc3b1",
+    "pitch_shift_semitones": 0
+  },
+  "bell": {
+    "source": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Vibraphone/Bowed/Vibes_bowed_A4_rr1_Main.wav",
+    "license": "CC0 1.0",
+    "license_page": "https://github.com/sgossner/VCSL/blob/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/LICENSE",
+    "original_sha256": "78be0c9d01f464cb76a46a398b3ae7ed412e9ae3d573f76c99a6821a1a04279f",
+    "sha256": "9756b06535080c1872a938cfe149d435e976bf3c7234bb1c8c1d37796091bc5c",
+    "pitch_shift_semitones": 0
+  },
+  "bass": {
+    "source": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Aerophones/Edge-blown%20Aerophones/Pipe%20Organ/Quiet%20Pedal/NT5_PedalQuiet_A2_rr1.wav",
+    "license": "CC0 1.0",
+    "license_page": "https://github.com/sgossner/VCSL/blob/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/LICENSE",
+    "original_sha256": "ec6e0b5e13b972878afa4adbecd5419431c6377e6f82dfb257597cc489a423e5",
+    "sha256": "c2baafab1f7ee6478240696f645cc0f1ac605ee8d97aac12f1710517b9825bc3",
+    "pitch_shift_semitones": -12
+  },
+  "strings": {
+    "source": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Chordophones/Zithers/Psaltery%2C%20Bowed%20and%20Plucked/LongBow/BowedPsaltery_C4_Main_LongBow_rr1.wav",
+    "license": "CC0 1.0",
+    "license_page": "https://github.com/sgossner/VCSL/blob/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/LICENSE",
+    "original_sha256": "57f455c9412f2d642e8d423207aa7a12f48dde77293283d058636b08cd8fdfb0",
+    "sha256": "2eea799fd7081723cd62836688f65b7d0a4d85012d753b709056a96d0f8a50f2",
+    "pitch_shift_semitones": -3
+  },
+  "harp": {
+    "source": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Chordophones/Composite%20Chordophones/Concert%20Harp/KSHarp_A2_mf1.wav",
+    "license": "CC0 1.0",
+    "license_page": "https://github.com/sgossner/VCSL/blob/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/LICENSE",
+    "original_sha256": "1df9f4d138ca3931fcb458bcdf01304cadf2e5f4eef67bbc17b0e42c0e60fce6",
+    "sha256": "f2a4b9a4488e84edf35f6a521c4070f5e5719c005c9615d839b5687b7b1f2dbd",
+    "pitch_shift_semitones": 0
   }
 }

@@ -12,7 +12,7 @@
 
 在同一场景选一个基准镜，先把两镜的共有物放在同一显示尺寸看。若下镜的中灰偏暗，在横版 `edit.json` 或竖版计划的对应 shot 上写 `"grade":{"gamma":1.06}`。若暗部和高光同时拉得太开，用小于 1 的 `contrast` 收回层次。若同一件物品在下镜显得过艳，可单调 `saturation`。按同一材质微调后连播切点，再看肤色、白纸和暗处纹理。比较原件本身的颜色或亮度时，两边使用相同处理。
 
-`gamma`、`contrast`、`saturation` 的中性值均为 1。`gamma` 大于 1 提亮中间调，`contrast` 围绕信号中点调整对比，`saturation` 为 0 输出灰度。处理在源色彩归一化后的 10 位视频范围内进行，早于画面裁切、PNG 图层、字幕与角标。横版候选在 `technical.json → color.shots` 记录采用值。用未经调色的同场底片局部返修时，给 `render_window.py` 传相同的 `--grade '{"gamma":1.06}'`；已有调色的画面直接沿用原色。
+`gamma`、`contrast`、`saturation` 的中性值均为 1。`gamma` 大于 1 提亮中间调，`contrast` 围绕信号中点调整对比，`saturation` 为 0 输出灰度。另支持 `look`（`editorial-warm`、`tech-cool`、`archive-sepia`、`cinema-neutral`、`high-contrast-doc`、`night-slate`）、`exposure`（`-3..3` EV 线性曝光）、`temperature` / `tint`（`-1..1` 保亮度色温色调）、`shadows` / `highlights`（`-1..1` 暗部与高光层次）、`vibrance`（`-0.6..0.8` 保护高饱和色与肤色的自然饱和度），以及 `.cube` 3D LUT（`lut` 与 `lut_strength`）。可在 `edit.json` 顶层写 `grade` 统一全片实拍基调，数据/动效生成镜默认跳过，单镜可写 `"grade": false` 豁免。处理在源色彩归一化后的 10 位视频范围内进行，早于画面裁切、PNG 图层、字幕与角标。光学质感 `finish`（`vignette`、`grain`、`sharpen`、`bloom`、`blur`）在构图与运镜之后、图层与字幕之前生效。横版候选在 `technical.json → color.shots` 记录采用值。用未经调色的同场底片局部返修时，给 `render_window.py` 传相同的 `--grade` 和 `--finish` JSON；已有调色的画面直接沿用原色。
 
 ## 用共同中性物校正偏色
 

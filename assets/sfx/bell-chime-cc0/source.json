@@ -1,0 +1,19 @@
+{
+  "key": "bell-chime-cc0",
+  "tag": "chime",
+  "title": "Bowed vibraphone chime",
+  "author": "VCSL contributors",
+  "page": "https://github.com/sgossner/VCSL/blob/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Vibraphone/Bowed/Vibes_bowed_A4_rr1_Main.wav",
+  "license": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "kind": "48kHz mono PCM prepared from verified CC0 1.0 acoustic instrument recording",
+  "stars": null,
+  "votes": null,
+  "duration": 0.95,
+  "anchor": 0.6520416666666666,
+  "source_sha256": "78be0c9d01f464cb76a46a398b3ae7ed412e9ae3d573f76c99a6821a1a04279f",
+  "wav_sha256": "a8e417f723670c9c8bf7952b4de13dc70417dc3a6e65af39e5bd8f70848e09dc",
+  "instrument": "vibraphone",
+  "license_page": "https://github.com/sgossner/VCSL/blob/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/LICENSE",
+  "source": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Vibraphone/Bowed/Vibes_bowed_A4_rr1_Main.wav",
+  "preparation": "highpass=f=100; mono 48 kHz PCM; trim to 0.95s, scale peak to 0.82 and fade edges"
+}

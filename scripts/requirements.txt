@@ -1,5 +1,6 @@
 # Versions used for the tested Python 3.12 production environment
 numpy==2.3.5
+opencv-python-headless==4.11.0.86
 Pillow==13.0.0
 requests==2.34.2
 sherpa-onnx==1.12.39

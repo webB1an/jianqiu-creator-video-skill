@@ -6,11 +6,11 @@
 
 | 镜头要让观众看清什么 | 可选模板 | 剪辑时看哪一帧 |
 | --- | --- | --- |
-| 数量、差异、趋势、构成或步骤 | 数字滚动、同尺度横条、实测折线、占比环、步骤交接 | 让关键词落在变化或落定处，留出读数和单位的时间。 |
-| 谁在说、原话哪些字有分量 | 人物身份条、原句分段划亮、引语与署名 | 身份条让开人物和主字幕，着重色跟随实际被读到的短语。 |
-| 观众该看原件哪一处 | 定点推近、同位对比滑尺、全屏缩入画中画、前后景视差、局部聚光、双照片叠放 | 对比图先对齐同一部位。聚光按原图坐标移动，双照片各保留阅读时间，视差前景使用透明层。 |
-| 上一镜如何交给下一镜 | 横推、擦除、叠化、圆窗、时钟扫入、翻面、推近切换、双源分屏取景 | 确认两侧素材各自的入点和重叠段，重点动作保留完整。 |
-| 如何进入一章、如何收住结尾 | 章节标题、渐变、网格脉冲、宽银幕开幅、标志描边、结尾回扣、片尾署名 | 主标题出现时让背景减速，结尾完整停留到能读完。 |
+| 数量、差异、趋势、构成、多指标、表格、时间轴或架构拆解 | 数字滚动、同尺度横条、实测折线、占比环、步骤交接、多指标卡网格、逐行对比表格、横向时间轴节点、**2.5D 矢量结构爆炸拆解（`exploded-diagram`）** | 全部数据模板均支持 `theme: "dark" | "light"`、`transparent: true` 与顶层 `background` 动态视频铺底；让关键词落在变化或落定处，留出读数和单位的时间。 |
+| 谁在说、开场钩子、局部标注、手工贴纸与原话 | 人物身份条（含平滑退场）、开场钩子大字、画面指引标注、**12fps 抽帧贴纸标注（`sticker-callout`）**、原句分段划亮、引语与署名 | 身份条、指引标注与 12fps 贴纸让开人物与主字幕；`sticker-callout` 叠在 30fps 实拍视频上可自然拉开两层帧率质感。 |
+| 观众该看原件哪一处、3D 景深、双层证据弹窗与连续无限画布 | 定点推近、同位对比滑尺、全屏缩入画中画、前后景视差、局部聚光、双照片叠放、**3D 景深倾斜推镜（`spatial-3d-card`）**、**实拍铺底证据弹窗（`broll-evidence-pop`）**、**连续无限画布调查桌（`infinite-canvas`）** | 对比图先对齐同一部位；`broll-evidence-pop` 让实拍底片循环不停；`infinite-canvas` 在共享 3200×1800 物理桌面上沿 `waypoints` 飞移衔接多条证据，保留跨句空间记忆。 |
+| 上一镜如何交给下一镜 | 横推、擦除、叠化、圆窗、时钟扫入、翻面、推近切换、方向模糊甩镜、光学离焦叠化、双源分屏取景、**几何圆环匹配剪辑（`match-cut-ring`）** | 默认缓动 `timing: "cubic"`（可选 `spring` / `linear`）；`match-cut-ring` 用同坐标锚点将实拍主体硬核接力成图形圆环。 |
+| 如何进入一章、如何收住结尾 | 章节标题、渐变、网格脉冲、宽银幕开幅、标志描边、结尾回扣（支持 `items` 分项弹入与见秋叶标）、片尾署名 | 主标题出现时让背景减速，结尾完整停留到能读完，优先配 `background` 动态底片。 |
 
 模板分类参考 React Video Editor 的公开目录。各条目的 `reference` 指向具体示例，`implementation` 记录本机实际调用。八种双景切换调用已安装的官方 `@remotion/transitions`，双源分屏复用本 skill 的 `EvidenceCut`。图表、文字和包装保留可编辑 JSX。示例数字、表盘和署名用于演示，上片时换成本期内容。[React Video Editor 参考目录](https://www.reactvideoeditor.com/remotion-templates) · [官方转场](https://www.remotion.dev/docs/transitions/)
 
@@ -30,7 +30,10 @@ PY="$HOME/.cache/creator-video-env/bin/python"
 "$PY" "$SK/scripts/remotion_library.py" render wipe.json --out wipe.mp4
 ```
 
-独立配置的 `width`、`height`、`fps`、`frames` 是画幅和本镜时基。镜内从第 0 帧计时，最后一帧是 `frames - 1`。视频素材的 `sourceStart`、`outStart` 等入点也用本镜帧率表达。人物身份条可在配置顶层填 `"background":"assets/interview.mp4"`。网格、描边或署名叠在实拍上时，同时设 `params.transparent` 为 `true`。MP4 输出已合成底片，声音、主字幕在全片导出时统一制作。
+独立配置的 `width`、`height`、`fps`、`frames` 是画幅和本镜时基。镜内从第 0 帧计时，最后一帧是 `frames - 1`。视频素材的 `sourceStart`、`outStart` 等入点也用本镜帧率表达。**为避免纯色 PPT 观感，所有数据图（`stat-counter`/`bar-chart`/`line-chart`/`donut-chart`/`progress-steps`/`metric-grid`/`comparison-table`/`timeline-strip`）和文字卡（`chapter-title`/`quote-card`/`end-card`/`text-highlight`/`kinetic-hook`）均可直接在 `remotion_effect` 顶层传 `"background":"assets/broll.mp4"`（真实实拍/档案视频）**：
+- 渲染器自动探测视频长度并在短于本镜时无缝循环（`backgroundLoop: true` 默认开启，支持 `backgroundStart` 帧入点）；
+- 自动叠加防干扰柔焦（`backgroundBlur`，视频默认 `1.5` px）、缓慢光学微推（`backgroundMotion: "drift"`，可设 `"none"` 关闭）与按 `theme` 适配的半透明压暗/暖纸蒙版（`backgroundScrim`，可自定义 CSS 渐变或设 `false`）；
+- 前景组件自动切换为透明/磨砂玻璃卡片，不再用纯色遮盖底片；即使无视频底片，所有数据卡和文字卡也默认带有克制的全程微动呼吸与活跃节点脉动（可设 `params.ambient: false` 关闭）。`end-card` 另支持 `params.items` 数组（如 `["查定义","核公理","比命题","验内核"]`）逐项弹入，避免长句折出单字孤行。MP4 输出已合成底片，声音、主字幕在全片导出时统一制作。
 
 ## 接入本期分镜
 

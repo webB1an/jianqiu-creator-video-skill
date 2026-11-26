@@ -71,5 +71,49 @@
     "media":["first","second"],
     "example":{"first":"examples/as11-40-5903.jpg","second":"examples/as11-40-5878.jpg"},
     "parameters":"first、second 均可换本地图片或视频。secondAt 指第二张开始出现的镜内帧，可绑定讲到第二件证据的词；entryFrames 控制每张卡片的落位时间。firstFit、secondFit 默认 contain，完整展示原件；可按需改 cover。firstStart、secondStart 用合成帧指定各自的视频入点，第二段从出场才开始播放。"
+  },
+  {
+    "id":"spatial-3d-card",
+    "name":"3D 景深倾斜推镜",
+    "tags":["媒体","3D","景深","移焦","推镜","立体卡片","Vox","Johnny Harris","文件"],
+    "component":"Spatial3DCard",
+    "description":"将原件、网页或实拍画面置于 1400px 透视 3D 空间内做倾斜轨道推镜，附开场光学移焦与实时投影；支持顶层 background 实拍视频铺底。",
+    "reference":"https://www.remotion.dev/docs/",
+    "implementation":"本地 CSS 3D preserve-3d 透视轨道 + 实时投影 + 入场移焦，支持透明叠在实拍视频上。",
+    "media":["source"],
+    "example":{"source":"examples/as11-40-5903.jpg","fromRotateX":12,"toRotateX":2,"fromRotateY":-16,"toRotateY":5,"fromZoom":0.86,"toZoom":1.04,"label":"核心原件 · 透视审阅"},
+    "parameters":"source 为本地图片或视频，fit 默认 cover，sourceStart 指定视频入点。fromRotateX/toRotateX、fromRotateY/toRotateY、fromRotateZ/toRotateZ 控制三轴旋转角度，fromZoom/toZoom 控制景深推进，rackFocus 默认 true 开启开场移焦，label 可选左下角标牌，accent 设边框色；支持顶层 background 实拍视频。"
+  },
+  {
+    "id":"broll-evidence-pop",
+    "name":"实拍铺底证据弹窗",
+    "tags":["媒体","双层复合","B-roll","弹窗","证据","画中画","移焦","防PPT"],
+    "component":"BrollEvidencePop",
+    "description":"全屏动态实拍持续推进铺底，讲到证据时自动柔化压暗背景并弹性滑出局部证据弹窗，讲完再自然收回实拍，彻底消除整屏硬切黑底图的割裂感。",
+    "reference":"https://www.remotion.dev/docs/",
+    "implementation":"本地双层复合舞台，底片支持自动循环视频 + 同步虚化压暗，前景支持单个或多个定时弹窗。",
+    "media":["source","evidence"],
+    "example":{"source":"examples/as11-40-5903.jpg","evidence":"examples/dial-after.svg","title":"核心读数核验","side":"right","enterFrame":16,"exitFrame":76},
+    "parameters":"source 为持续播放的全屏铺底 B-roll 视频或图（视频自动循环，可设 sourceLoop:false 关闭）；单弹窗用 evidence、title、side（left/right/center）、enterFrame、exitFrame、popupWidth；多弹窗传 popups 数组 [{source, title, enterFrame, exitFrame, side, width}]，配合 cues 精准绑词。backdropBlur（默认 4.5）与 backdropDim（默认 0.48）控制弹窗期间底片虚化压暗。"
+  },
+  {
+    "id":"infinite-canvas",
+    "name":"连续无限画布调查桌",
+    "tags":["媒体","无限画布","空间运镜","调查桌","证据链","连续世界","Johnny Harris","Vox"],
+    "component":"InfiniteCanvas",
+    "description":"将 2–6 张关联证据卡与红线线索排布在同一张 3200×1800 连续调查桌上，镜头沿 waypoints 平滑飞移、缩放、旋转，前一张证据退到边缘依然保留空间记忆。",
+    "reference":"https://www.remotion.dev/docs/",
+    "implementation":"本地 3200×1800 共享物理桌面 + SVG 线索连线 + 缓动航点摄像机，支持卡片内嵌本地原件图与实读词锚。",
+    "media":[],
+    "example":{
+      "boardTitle":"证据链全局视图",
+      "theme":"dark",
+      "nodes":[
+        {"kicker":"01 · 源头假设","x":0.26,"y":0.42,"title":"1859 临界线猜想","stat":"Re(s) = 1/2","body":"所有非平凡零点是否全落在同一条直线上？"},
+        {"kicker":"02 · AI 协作","x":0.52,"y":0.60,"title":"1700 万行形式化代码","stat":"Lean 4","body":"机器逐行校验，但仍需审查公理定义是否偷换。"},
+        {"kicker":"03 · 真正检验","x":0.76,"y":0.38,"title":"四步核验框架","stat":"4 步","body":"查定义、核公理、比命题、验内核。"}
+      ]
+    },
+    "parameters":"nodes 传 2–6 个空间节点（title 必填，x/y 为 0–1 桌面坐标，可选 kicker、stat、body、source、image、width、accent、tilt）；links 为连线 [{from,to,color}]；waypoints 为镜头航点 [{frame,at:[x,y],zoom,rotate}]，不填则自动依次巡航所有节点最后拉远展示全貌；支持 theme（dark/light）、boardTitle 及顶层 background 动态视频底片。"
   }
 ]

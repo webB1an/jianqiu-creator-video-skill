@@ -645,6 +645,14 @@ def main():
     cfg.add_argument('path',nargs='?',type=Path)
     sub.add_parser('verify')
     sub.add_parser('browse')
+    iv=sub.add_parser('index-visual',help='Extract keyframe visual descriptors & semantic vectors for B-roll search')
+    iv.add_argument('--force',action='store_true')
+    ss=sub.add_parser('semantic-search',help='Search B-roll by subtext, mood, color tone, motion energy & shot scale')
+    ss.add_argument('query')
+    ss.add_argument('--top',type=int,default=6)
+    ss.add_argument('--mood',choices=['dark','warm','cool','neutral'])
+    ss.add_argument('--scale',choices=['wide','medium','macro'])
+    ss.add_argument('--energy',choices=['calm','moderate','high'])
     args=ap.parse_args()
     if args.cmd=='set-default' and args.path:
         if args.root and args.root.expanduser().resolve()!=args.path.expanduser().resolve():
@@ -685,6 +693,13 @@ def main():
         with exclusive(root):
             write_html(root,load(root))
         print(root/'index.html')
+    if args.cmd=='index-visual':
+        import semantic_broll
+        res=semantic_broll.build_index(root,force=args.force)
+        print(json_text({k:v for k,v in res.items() if k!='items'}))
+    if args.cmd=='semantic-search':
+        import semantic_broll
+        print(json_text(semantic_broll.search_semantic(args.query,root=root,top=args.top,mood=args.mood,scale=args.scale,energy=args.energy)))
 
 
 if __name__=='__main__':

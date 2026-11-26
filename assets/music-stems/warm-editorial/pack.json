@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "warm-editorial",
+  "name": "人文档案与温暖叙事（88 BPM · C 大调）",
+  "bpm": 88,
+  "key": "C major / A minor",
+  "mood": "warm, reflective, story",
+  "loop_seconds": 10.9091,
+  "license": "CC0 1.0 (arranged from verified CC0 samples in assets/instruments/sources.json)",
+  "stems": {
+    "pad": "pad.wav",
+    "piano": "piano.wav",
+    "bass": "bass.wav",
+    "percussion": "percussion.wav"
+  }
+}

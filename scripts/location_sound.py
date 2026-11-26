@@ -5,6 +5,9 @@ import subprocess
 from sound_clock import RATE, finite
 
 
+ALLOWED_KEYS = {'source_range', 'gain_db', 'fade_in', 'fade_out', 'j_cut', 'l_cut', 'file', 'mode'}
+
+
 def location_cues(edit, timeline):
     shots = [s for s in edit.get('shots', []) if 'location_sound' in s]
     if not shots:
@@ -15,28 +18,62 @@ def location_cues(edit, timeline):
     cues = []
     for shot in shots:
         spec = shot['location_sound']
-        if (not isinstance(spec, dict) or set(spec) - {'source_range', 'gain_db', 'fade_in', 'fade_out'}
-                or 'remotion_effect' in shot or 'explainer_scene' in shot):
-            raise ValueError(f'{shot["id"]}: location_sound reads the original audio track of a direct visual')
+        if not isinstance(spec, dict) or set(spec) - ALLOWED_KEYS:
+            raise ValueError(f'{shot["id"]}: invalid location_sound fields')
+        custom_file = spec.get('file')
+        if not custom_file and ('remotion_effect' in shot or 'explainer_scene' in shot):
+            raise ValueError(f'{shot["id"]}: location_sound without file reads the original audio track of a direct visual')
+        j_cut = float(spec.get('j_cut', 0) or 0)
+        l_cut = float(spec.get('l_cut', 0) or 0)
+        if not all(finite(v) and v >= 0 for v in (j_cut, l_cut)):
+            raise ValueError(f'{shot["id"]}: j_cut and l_cut must be nonnegative seconds')
+        entry = float(shot.get('in', 0) or 0)
+        if not finite(entry) or entry < 0:
+            raise ValueError(f'{shot["id"]}: invalid picture in-point')
+        shot_start_s = timing[shot['id']]['start_frame'] / fps
+        shot_dur_s = timing[shot['id']]['frames'] / fps
         span = spec.get('source_range')
+        if span is None:
+            # Declarative J-Cut / L-Cut shorthand: derive source_range from shot in/duration + overlaps.
+            eff_j = min(j_cut, entry if not custom_file else j_cut, shot_start_s)
+            src_start = max(0.0, (0.0 if custom_file else entry) - eff_j)
+            src_end = src_start + eff_j + shot_dur_s + l_cut
+            span = [round(src_start, 6), round(src_end, 6)]
+            prog_start_s = shot_start_s - eff_j
+        else:
+            if not isinstance(span, list) or len(span) != 2 or not all(finite(t) for t in span) or not 0 <= span[0] < span[1]:
+                raise ValueError(f'{shot["id"]}: give an increasing source_range in seconds')
+            if custom_file:
+                prog_start_s = shot_start_s - j_cut
+            else:
+                prog_start_s = shot_start_s + (span[0] - entry) - (j_cut if abs(span[0] - entry) < 1e-6 else 0.0)
         gain = spec.get('gain_db', 0)
-        fades = [spec.get(k, 0) for k in ('fade_in', 'fade_out')]
-        if (not isinstance(span, list) or len(span) != 2 or not all(finite(t) for t in span)
-                or not 0 <= span[0] < span[1] or not finite(gain)
-                or not all(finite(t) and t >= 0 for t in fades)):
-            raise ValueError(f'{shot["id"]}: give an increasing source_range in seconds, finite gain_db and fades')
+        default_fi = round(min(0.45, max(0.06, j_cut * 0.45)), 3) if j_cut > 0 else 0.0
+        default_fo = round(min(0.45, max(0.06, l_cut * 0.45)), 3) if l_cut > 0 else 0.0
+        fades = [spec.get('fade_in', default_fi), spec.get('fade_out', default_fo)]
+        if not finite(gain) or not all(finite(t) and t >= 0 for t in fades):
+            raise ValueError(f'{shot["id"]}: give finite gain_db and nonnegative fades')
         begin, end = (round(t * RATE) for t in span)
         fade_in, fade_out = (round(t * RATE) for t in fades)
         count = end - begin
-        entry = shot.get('in', 0)
-        if not finite(entry) or entry < 0:
-            raise ValueError(f'{shot["id"]}: invalid picture in-point')
-        first = round(timing[shot['id']]['start_frame'] * RATE / fps) + begin - round(entry * RATE)
-        if count < 1 or first < 0 or first + count > samples or fade_in + fade_out > count:
+        first = round(prog_start_s * RATE)
+        if first < 0:
+            trim_front = -first
+            begin += trim_front
+            count -= trim_front
+            first = 0
+        if first + count > samples:
+            count = samples - first
+            end = begin + count
+        if count < 1 or fade_in + fade_out > count:
             raise ValueError(f'{shot["id"]}: location_sound or fades fall outside their available time')
-        cues.append(dict(shot=shot['id'], file=shot['visual'], source_samples=[begin, end],
-                         programme_samples=[first, first + count], gain_db=gain,
-                         fade_in_samples=fade_in, fade_out_samples=fade_out, sample_rate=RATE))
+        cues.append(dict(
+            shot=shot['id'], file=custom_file or shot['visual'],
+            mode=spec.get('mode', 'soundbite' if custom_file else 'location'),
+            j_cut=j_cut, l_cut=l_cut,
+            source_samples=[begin, end], programme_samples=[first, first + count],
+            gain_db=gain, fade_in_samples=fade_in, fade_out_samples=fade_out, sample_rate=RATE,
+        ))
     return cues
 
 

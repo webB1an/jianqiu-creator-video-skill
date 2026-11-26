@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "kinetic-teardown",
+  "name": "快节奏硬核拆解与评测（118 BPM · D 小调）",
+  "bpm": 118,
+  "key": "D minor",
+  "mood": "energetic, crisp, teardown",
+  "loop_seconds": 8.1356,
+  "license": "CC0 1.0 (arranged from verified CC0 samples in assets/instruments/sources.json)",
+  "stems": {
+    "pad": "pad.wav",
+    "piano": "piano.wav",
+    "bass": "bass.wav",
+    "percussion": "percussion.wav"
+  }
+}

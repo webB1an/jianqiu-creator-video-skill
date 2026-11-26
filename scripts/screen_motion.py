@@ -122,6 +122,14 @@ def main():
         tinted = ImageChops.multiply(clean,Image.new('RGB',clean.size,color))
     move = cfg.get('move_frames',[0,cfg.get('settle_frame',frames-1)])
     reveal = cfg.get('reveal_frames',[0,frames-1])
+    drift_zoom = float(cfg.get('drift_zoom', 0.025))
+    if not (0.0 <= drift_zoom <= 0.25):
+        parser.error('drift_zoom must be between 0.0 and 0.25')
+    stops = cfg.get('stops')
+    if stops is not None:
+        if not isinstance(stops, list) or len(stops) < 2:
+            parser.error('stops requires at least 2 camera waypoints [{frame, view:[cx,cy,w]}]')
+        stops = sorted(stops, key=lambda s: s['frame'])
     for interval in ([move,reveal] if (selected or tinted) else [move]):
         if len(interval) != 2 or not all(math.isfinite(v) for v in interval) or interval[0] >= interval[1]:
             parser.error('Use an ordered pair of frame positions for each time window')
@@ -132,8 +140,26 @@ def main():
         finished_ink=None
         with subprocess.Popen(cmd,stdin=subprocess.PIPE) as enc:
             for n in range(frames):
-                progress=ease_frames(n,*move)
-                cx,cy,w=[interp(a,b,progress) for a,b in zip(cfg['view_from'],cfg['view_to'])]
+                if stops is not None:
+                    if n <= stops[0]['frame']:
+                        cx, cy, w = stops[0]['view']
+                    elif n >= stops[-1]['frame']:
+                        cx, cy, w = stops[-1]['view']
+                        if drift_zoom > 0 and frames - 1 > stops[-1]['frame']:
+                            tail_t = (n - stops[-1]['frame']) / max(1, frames - 1 - stops[-1]['frame'])
+                            w = w / (1.0 + drift_zoom * tail_t)
+                    else:
+                        idx = max(i for i, s in enumerate(stops) if s['frame'] <= n)
+                        a_s, b_s = stops[idx], stops[idx + 1]
+                        t = ease_frames(n, a_s['frame'], b_s['frame'])
+                        cx, cy, w = [interp(a, b, t) for a, b in zip(a_s['view'], b_s['view'])]
+                else:
+                    progress=ease_frames(n,*move)
+                    cx,cy,w=[interp(a,b,progress) for a,b in zip(cfg['view_from'],cfg['view_to'])]
+                    # Keep a subtle optical push-in after move_frames settles so evidence plates stay alive.
+                    if drift_zoom > 0 and n > move[1] and frames - 1 > move[1]:
+                        tail_t = (n - move[1]) / max(1, frames - 1 - move[1])
+                        w = w / (1.0 + drift_zoom * tail_t)
                 picture=clean
                 if selected:
                     picture=reveal_selection(clean,selected,cfg['lines'],cfg['clip'],cfg['dpr'],ease_frames(n,*reveal))

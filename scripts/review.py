@@ -101,6 +101,17 @@ def main():
     p.add_argument('--media',type=Path,help='Specific candidate or historical master')
     p.add_argument('--sidecars',type=Path,help='Captions and covers directory for standalone media')
     p.add_argument('--report-dir',type=Path,help='Report directory, by default next to staged media under qa/')
+    p.add_argument('--critique',action='store_true',help='Also build 1fps multimodal viewer critique packet and merge hotspots')
+    p.add_argument('--critique-seg-seconds',type=int,default=20,help='Segment length in seconds for --critique (default 20)')
+    p.add_argument('--critique-backend',choices=['auto','deepseek','local-vlm','gemini','offline'],default='auto',
+                   help='Multimodal critique backend (default auto: DeepSeek->Gemini->Local VLM->Offline vision)')
+    p.add_argument('--deepseek-api-key',help='DeepSeek API key (or set DEEPSEEK_API_KEY)')
+    p.add_argument('--deepseek-base-url',help='DeepSeek OpenAI-compatible base URL')
+    p.add_argument('--deepseek-model',help='DeepSeek model name (default deepseek-flash)')
+    p.add_argument('--deepseek-vision',action='store_true',help='Send storyboards to a DeepSeek-compatible vision gateway')
+    p.add_argument('--local-vlm-url',help='Local OpenAI-compatible VLM URL (Ollama/LM Studio/MLX)')
+    p.add_argument('--local-vlm-model',help='Local VLM model name')
+    p.add_argument('--run-gemini',action='store_true',help='With --critique, select Gemini in auto mode using GEMINI_API_KEY')
     args=p.parse_args()
     requested=args.media or latest() or Path('out/final.mp4')
     master=released_snapshot(requested)
@@ -168,6 +179,17 @@ def main():
         result['component_motion'] = inspect(master, component_windows, fps)
     result['pace']['picture_rhythm'] = inspect_rhythm(
         master, tl, bridges, subs, components=result.get('component_motion', []), windows=windows)
+    from narrative_audit import audit as audit_narrative
+    edit_source = None
+    if Path('edit.json').is_file():
+        try:
+            candidate_edit = json.loads(Path('edit.json').read_text())
+            if tl.get('edit_sha256') in (None, digest(Path('edit.json'))):
+                edit_source = candidate_edit
+        except (OSError, ValueError):
+            edit_source = None
+    result['pace']['editorial_diagnostics'] = audit_narrative(
+        tl, edit_source, subs=subs, sections=result['pace']['sections'], bridges=bridges)
     from covers import SIZES
     thumbs=[]
     for name,size in SIZES.items():
@@ -222,5 +244,26 @@ def main():
     if args.asr or args.listen_term:
         from listening_review import listening_report
         result['listening'] = listening_report(master, report_dir, tl, subs, result.get('recognized_cues'), args.listen_term)
+    if args.critique:
+        from multimodal_critique import build_packet
+        crit = build_packet(
+            Path.cwd(), master, report_dir / 'critique-packet',
+            seg_seconds=args.critique_seg_seconds, run_gemini=args.run_gemini,
+            backend=args.critique_backend,
+            deepseek_api_key=args.deepseek_api_key, deepseek_base_url=args.deepseek_base_url,
+            deepseek_model=args.deepseek_model, deepseek_vision=args.deepseek_vision,
+            local_vlm_url=args.local_vlm_url, local_vlm_model=args.local_vlm_model,
+            timeline_path=timeline_path, captions_path=sidecars / 'captions.srt',
+        )
+        result['multimodal_critique'] = {
+            'summary': crit.get('summary'),
+            'requested_backend': crit['requested_backend'],
+            'backend': crit['effective_backend'],
+            'backend_attempts': crit['backend_attempts'],
+            'hotspot_count': len(crit.get('auto_hotspots', [])),
+            'hotspots': crit.get('auto_hotspots', []),
+            'ai_critique': crit.get('ai_critique'),
+            'rubric': str(report_dir / 'critique-packet/critique-rubric.json'),
+        }
     (report_dir/'content-check.json').write_text(json.dumps(result,ensure_ascii=False,indent=2))
 if __name__=='__main__':main()

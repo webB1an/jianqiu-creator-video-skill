@@ -176,7 +176,7 @@ def freeze_credits(edit, sidecars, old, destination, automatic=None):
 
 
 def stage(media, sidecars, *, out=Path('out'), technical=None, timeline=None, edit=None,
-          render_inputs=None, render_skill_version=None, before_commit=None, automatic_credits=None):
+          render_inputs=None, render_skill_version=None, before_commit=None, automatic_credits=None, caption_regions=None):
     media, sidecars, out = Path(media), Path(sidecars), Path(out)
     pinned = released_snapshot(media)
     if pinned != media and sidecars.resolve() == media.parent.resolve():
@@ -212,6 +212,10 @@ def stage(media, sidecars, *, out=Path('out'), technical=None, timeline=None, ed
         # Preserve the rendering identity for the same bytes; staging has its own version.
         origin = old if old.get('sha256') == sha else {}
         same_timeline = bool(origin) and (timeline is None or origin.get('timeline_sha256') == digest(timeline))
+        if caption_regions is not None:
+            receipt['rendered_caption_regions'] = caption_regions
+        elif same_timeline and checks['captions.srt'] == origin.get('sidecars', {}).get('captions.srt') and 'rendered_caption_regions' in origin:
+            receipt['rendered_caption_regions'] = origin['rendered_caption_regions']
         if origin.get('viewing_windows') and same_timeline:
             receipt['viewing_windows'] = origin['viewing_windows']
         if origin.get('rhythm_cuts') and same_timeline and timeline:

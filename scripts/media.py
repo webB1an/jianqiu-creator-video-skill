@@ -65,7 +65,7 @@ def search(provider, query):
     if provider == 'pexels':
         key = os.getenv('PEXELS_API_KEY')
         if not key:
-            raise ValueError('Pexels video search requires PEXELS_API_KEY. Use Openverse, a source library, or local video.')
+            raise ValueError('Pexels video search requires PEXELS_API_KEY (note: Pexels currently paused new key issuance at https://www.pexels.com/api/key/). Use PIXABAY_API_KEY (free at https://pixabay.com/api/docs/), nasa-video, archive-video, or commons-video.')
         rows = session.get('https://api.pexels.com/v1/videos/search',params={'query':query,'per_page':8},headers={'Authorization':key},timeout=25)
         rows.raise_for_status()
         result = []
@@ -73,6 +73,61 @@ def search(provider, query):
             files = [f for f in r['video_files'] if f['file_type']=='video/mp4' and f.get('width')]
             if files:
                 result.append(dict(title=query,author=r['user']['name'],source=r['url'],url=min(files,key=lambda f:abs(f['width']-1920))['link'],rights='https://www.pexels.com/license/'))
+        return result
+    if provider == 'nasa-video':
+        rows = session.get('https://images-api.nasa.gov/search', params={'q': query, 'media_type': 'video', 'page_size': 8}, timeout=25)
+        rows.raise_for_status()
+        result = []
+        for item in rows.json().get('collection', {}).get('items', []):
+            info = (item.get('data') or [{}])[0]
+            nasa_id = info.get('nasa_id')
+            if not nasa_id:
+                continue
+            try:
+                manifest = session.get('https://images-api.nasa.gov/asset/' + quote(nasa_id, safe=''), timeout=20)
+                manifest.raise_for_status()
+                hrefs = [x.get('href', '') for x in manifest.json().get('collection', {}).get('items', []) if x.get('href', '').lower().endswith('.mp4')]
+            except Exception:
+                hrefs = []
+            if not hrefs:
+                continue
+            # Prefer medium/orig HD MP4 over tiny mobile previews.
+            chosen = next((u for u in hrefs if '~orig.mp4' in u), None) or next((u for u in hrefs if '~medium.mp4' in u), None) or hrefs[0]
+            result.append(dict(
+                title=info.get('title', nasa_id),
+                author=info.get('photographer') or info.get('center') or 'NASA',
+                source='https://images.nasa.gov/details/' + nasa_id,
+                url=chosen,
+                description=(info.get('description') or '')[:240],
+                rights='https://www.nasa.gov/nasa-brand-center/images-and-media/',
+                kind='video',
+            ))
+            if len(result) >= 6:
+                break
+        return result
+    if provider == 'pixabay-video':
+        key = os.getenv('PIXABAY_API_KEY')
+        if not key:
+            raise ValueError('Pixabay video search requires PIXABAY_API_KEY (get a free key after logging in at https://pixabay.com/api/docs/, then export it in ~/.zshenv and ~/.zshrc). Or use keyless nasa-video, archive-video, commons-video.')
+        rows = session.get('https://pixabay.com/api/videos/', params={'key': key, 'q': query, 'per_page': 8}, timeout=25)
+        rows.raise_for_status()
+        result = []
+        for hit in rows.json().get('hits', []):
+            vids = [v for v in (hit.get('videos') or {}).values() if isinstance(v, dict) and v.get('url')]
+            hd = [v for v in vids if int(v.get('width') or 0) >= 1920]
+            best = min(hd, key=lambda v: int(v.get('width') or 99999)) if hd else (max(vids, key=lambda v: int(v.get('width') or 0)) if vids else {})
+            if best.get('url'):
+                result.append(dict(
+                    title=hit.get('tags', query),
+                    author=hit.get('user', 'Pixabay'),
+                    source=hit.get('pageURL', ''),
+                    url=best['url'],
+                    width=best.get('width'),
+                    height=best.get('height'),
+                    duration=hit.get('duration'),
+                    rights='https://pixabay.com/service/license-summary/',
+                    kind='video',
+                ))
         return result
     rows = session.get('https://images-api.nasa.gov/search', params={'q':query,'media_type':'image','page_size':10},timeout=25)
     rows.raise_for_status()
@@ -121,15 +176,156 @@ def digest(path):
             value.update(block)
     return value.hexdigest()
 
+def search_video(query):
+    """Fan out across all available HD video B-roll providers (keyed if configured, keyless always)."""
+    providers = []
+    if os.getenv('PEXELS_API_KEY'):
+        providers.append('pexels')
+    if os.getenv('PIXABAY_API_KEY'):
+        providers.append('pixabay-video')
+    providers.extend(['nasa-video', 'archive-video', 'commons-video'])
+    found = {}
+    for prov in providers:
+        try:
+            found[prov] = search(prov, query)
+        except Exception as exc:
+            found[prov] = {'error': str(exc)}
+    return found
+
+
+def inspect_quality(path, *, target_fps=30):
+    """Pre-edit B-roll quality gate: detect internal scene cuts, blur, black bars, resolution & FPS cadence."""
+    import cv2
+    import numpy as np
+    from fractions import Fraction
+
+    p = Path(path).resolve()
+    if not p.is_file():
+        raise FileNotFoundError(f'Media not found: {p}')
+    raw = subprocess.check_output([
+        'ffprobe', '-v', 'error', '-select_streams', 'v:0',
+        '-show_entries', 'stream=width,height,r_frame_rate,avg_frame_rate,codec_name:format=duration',
+        '-of', 'json', str(p),
+    ], text=True)
+    meta = json.loads(raw)
+    streams = meta.get('streams') or []
+    if not streams:
+        return dict(file=str(p), ok=False, warnings=['文件不含视频画面轨道'])
+    v = streams[0]
+    w, h = int(v.get('width') or 0), int(v.get('height') or 0)
+    dur = float((meta.get('format') or {}).get('duration') or 0.0)
+    r_fps = float(Fraction(v.get('r_frame_rate', '0/1'))) if '/' in str(v.get('r_frame_rate', '')) else 0.0
+    a_fps = float(Fraction(v.get('avg_frame_rate', '0/1'))) if '/' in str(v.get('avg_frame_rate', '')) else r_fps
+    is_still = p.suffix.lower() in {'.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tif', '.tiff'}
+
+    warnings = []
+    if min(w, h) < 720:
+        warnings.append(f'分辨率偏低（{w}x{h} < 720p），大屏播放易发糊')
+    if h > w:
+        warnings.append(f'竖屏素材（{w}x{h}），横屏成片需配置 fit: "backdrop" 或竖屏专用裁切')
+    if not is_still and r_fps > 0 and abs(r_fps - a_fps) > 0.5:
+        warnings.append(f'检测到可变帧率 VFR（r={r_fps:.2f}, avg={a_fps:.2f}），建议核对音画与动作同步')
+    elif not is_still and a_fps > 0 and target_fps and abs(a_fps - target_fps) > 0.6 and (target_fps % round(a_fps) != 0):
+        warnings.append(f'帧率 {a_fps:.2f}fps 与成片 {target_fps}fps 非整倍关系，快速摇镜可能有轻微顿挫')
+
+    # Sample frames at 2fps (capped at 24 frames) for sharpness, black-bar, and internal scene-cut detection.
+    frames = []
+    if is_still:
+        im = cv2.imread(str(p))
+        if im is not None:
+            frames.append((0.0, cv2.resize(im, (320, 180), interpolation=cv2.INTER_AREA)))
+    else:
+        step = max(0.5, dur / 24.0) if dur > 0 else 0.5
+        t = 0.0
+        while t < max(0.5, dur - 0.1) and len(frames) < 24:
+            img_bytes = subprocess.check_output([
+                'ffmpeg', '-nostdin', '-v', 'error', '-ss', f'{t:.3f}', '-i', str(p),
+                '-frames:v', '1', '-vf', 'scale=320:180', '-f', 'image2pipe', '-vcodec', 'png', '-',
+            ])
+            if img_bytes:
+                im = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
+                if im is not None:
+                    frames.append((round(t, 2), im))
+            t += step
+
+    sharpness_vals = []
+    black_bar_hits = {'top': 0, 'bottom': 0, 'left': 0, 'right': 0}
+    scene_cuts = []
+    prev_hist = None
+    prev_luma = None
+
+    for ts, bgr in frames:
+        gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+        sharpness_vals.append(float(cv2.Laplacian(gray, cv2.CV_64F).var()))
+        fh, fw = gray.shape
+        strip_y, strip_x = max(4, fh // 14), max(4, fw // 14)
+        if gray[:strip_y, :].mean() < 14 and gray[:strip_y, :].std() < 6:
+            black_bar_hits['top'] += 1
+        if gray[-strip_y:, :].mean() < 14 and gray[-strip_y:, :].std() < 6:
+            black_bar_hits['bottom'] += 1
+        if gray[:, :strip_x].mean() < 14 and gray[:, :strip_x].std() < 6:
+            black_bar_hits['left'] += 1
+        if gray[:, -strip_x:].mean() < 14 and gray[:, -strip_x:].std() < 6:
+            black_bar_hits['right'] += 1
+
+        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+        hist = cv2.calcHist([hsv], [0, 1], None, [16, 16], [0, 180, 0, 256])
+        cv2.normalize(hist, hist)
+        luma = float(gray.mean())
+        if prev_hist is not None:
+            corr = float(cv2.compareHist(prev_hist, hist, cv2.HISTCMP_CORREL))
+            dl = abs(luma - prev_luma)
+            if corr < 0.42 or (corr < 0.62 and dl > 26.0):
+                scene_cuts.append(dict(seconds=ts, hist_corr=round(corr, 3), luma_jump=round(dl, 1)))
+        prev_hist, prev_luma = hist, luma
+
+    med_sharp = round(float(np.median(sharpness_vals)), 1) if sharpness_vals else 0.0
+    n_f = max(1, len(frames))
+    letterbox = (black_bar_hits['top'] / n_f >= 0.7 and black_bar_hits['bottom'] / n_f >= 0.7)
+    pillarbox = (black_bar_hits['left'] / n_f >= 0.7 and black_bar_hits['right'] / n_f >= 0.7)
+    if med_sharp < 45.0:
+        warnings.append(f'画面锐度偏低（Laplacian={med_sharp} < 45），疑似虚焦或过度压缩')
+    if letterbox:
+        warnings.append('检测到上下黑边（letterbox），建议裁切或设置 crop 去除硬黑边')
+    if pillarbox:
+        warnings.append('检测到左右黑边（pillarbox），建议裁切或改用 fit: "backdrop"')
+    if scene_cuts:
+        ts_str = '、'.join(f"{c['seconds']}s" for c in scene_cuts[:4])
+        warnings.append(f'检测到 {len(scene_cuts)} 处原片内部跳切（{ts_str}），选入点时请避开跳切取单一连续段')
+
+    return dict(
+        file=str(p), width=w, height=h, duration=round(dur, 2), fps=round(a_fps, 3),
+        sharpness=med_sharp, letterbox=letterbox, pillarbox=pillarbox,
+        internal_scene_cuts=scene_cuts, warnings=warnings, ok=len(warnings) == 0,
+    )
+
+
 if __name__ == '__main__':
     p=argparse.ArgumentParser(description=__doc__)
     sub=p.add_subparsers(dest='cmd',required=True)
     s=sub.add_parser('search')
-    s.add_argument('provider',choices=['nasa','openverse','commons-video','archive-video','pexels'])
+    s.add_argument('provider',choices=['nasa','nasa-video','openverse','commons-video','archive-video','pexels','pixabay-video'])
     s.add_argument('query')
+    sv=sub.add_parser('search-video', help='Search all available moving-video B-roll providers at once')
+    sv.add_argument('query')
     sub.add_parser('fetch').add_argument('manifest',type=Path)
+    qc=sub.add_parser('qc', help='Run B-roll quality gate (internal scene cuts, sharpness, black bars, FPS)')
+    qc.add_argument('target',type=Path, help='Video/image file or assets directory')
+    qc.add_argument('--target-fps',type=int,default=30)
     a=p.parse_args()
     if a.cmd=='search':
         print(json.dumps(search(a.provider,a.query),ensure_ascii=False,indent=2))
+    elif a.cmd=='search-video':
+        print(json.dumps(search_video(a.query),ensure_ascii=False,indent=2))
+    elif a.cmd=='qc':
+        exts = {'.mp4', '.m4v', '.mov', '.webm', '.mkv', '.jpg', '.jpeg', '.png', '.webp'}
+        if a.target.is_dir():
+            files = sorted(f for f in a.target.iterdir() if f.is_file() and f.suffix.lower() in exts)
+            rows = [inspect_quality(f, target_fps=a.target_fps) for f in files]
+            print(json.dumps({'directory': str(a.target), 'checked': len(rows),
+                              'flagged': sum(1 for r in rows if not r['ok']), 'files': rows},
+                             ensure_ascii=False, indent=2))
+        else:
+            print(json.dumps(inspect_quality(a.target, target_fps=a.target_fps), ensure_ascii=False, indent=2))
     else:
         fetch(a.manifest)

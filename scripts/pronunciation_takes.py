@@ -75,7 +75,9 @@ class DirectedVoice:
         self.voice=JianqiuVoice(pronunciation_lexicon=self.lexicon if units else None)
         self.recognizer=None
 
-    def get(self,line,default_speed,checker,write_wave):
+    def get(self,line,default_speed,checker,write_wave,*,mood='neutral',marked_words=None):
+        from jianqiu_voice import apply_mood_polish
+        from prosody_markup import PROSODY_VERSION, parse_prosody_markup
         from voice_endings import classify_ending
         import sherpa_onnx as so
         spec=line['pronunciation']
@@ -88,7 +90,10 @@ class DirectedVoice:
             text=re.sub('|'.join(re.escape(t) for t in sorted(directions,key=len,reverse=True)),
                         lambda m:self.codes[' '.join(directions[m.group()].split())],words)
         speed=float(line.get('speed',default_speed))
-        key=json_hash([VERSION,self.voice.signature,self.base_hash,text,spec,speed])[:24]
+        sig = self.voice.mood_signature(mood) if mood and mood != 'neutral' else self.voice.signature
+        use_prosody = parse_prosody_markup(marked_words)['has_markup']
+        prosody_key = [PROSODY_VERSION, marked_words] if use_prosody else []
+        key=json_hash([VERSION,sig,self.base_hash,text,spec,speed,*prosody_key])[:24]
         receipt=self.directory/(key+'.json')
         if receipt.exists():
             prior=json.loads(receipt.read_text());selected=Path(prior['selected'])
@@ -106,11 +111,18 @@ class DirectedVoice:
         attempts=[]
         target=spec.get('ending','')
         source=text.rstrip('。？！!?.,，')+'。'+guard+'。' if guard else text
+        timing_text = marked_words if use_prosody else None
+        if timing_text is not None and guard:
+            timing_text = timing_text.rstrip('。？！!?.,，') + '。' + guard + '。'
         for idx,rate in enumerate(spec.get('speeds',[speed,min(1.,speed),.91])):
             raw=self.directory/(key+f'-{idx}-raw.wav')
             if not raw.is_file():
-                audio=self.voice.generate(source,rate,preserve_pauses=True)
-                atomic_output(raw,lambda p:write_wave(p,audio))
+                audio=self.voice.generate(source,rate,preserve_pauses=True,mood=mood,timing_text=timing_text)
+                def _write_dir(p, _a=audio, _m=mood):
+                    write_wave(p, _a)
+                    if _m and _m != 'neutral':
+                        apply_mood_polish(p, _m)
+                atomic_output(raw,_write_dir)
             if not self.recognizer:
                 chosen=raw
                 attempts.append({'speed':rate,'file':str(raw),'selected_file':str(raw),'accepted':True,

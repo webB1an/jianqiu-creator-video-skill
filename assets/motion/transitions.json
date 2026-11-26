@@ -26,6 +26,41 @@
     "seconds": 0.4,
     "use": "纵向列表或时间轴进入下面一段，维持内容上下顺序"
   },
+  "whip-left": {
+    "filter": "spatial",
+    "seconds": 0.3,
+    "use": "带缓动与方向运动模糊的快速左推换场，衔接同级证据或并列场景"
+  },
+  "whip-right": {
+    "filter": "spatial",
+    "seconds": 0.3,
+    "use": "带缓动与方向运动模糊的快速右推换场，回切到上一空间或对照对象"
+  },
+  "whip-up": {
+    "filter": "spatial",
+    "seconds": 0.33,
+    "use": "带缓动与纵向模糊的快速上推换场，进入下一步或下层细节"
+  },
+  "whip-down": {
+    "filter": "spatial",
+    "seconds": 0.33,
+    "use": "带缓动与纵向模糊的快速下推换场，回到上层概览"
+  },
+  "blur-dissolve": {
+    "filter": "spatial",
+    "seconds": 0.43,
+    "use": "光学离焦叠化，时间或场景跨度较大时自然柔和换场"
+  },
+  "dip-ink": {
+    "filter": "spatial",
+    "seconds": 0.47,
+    "use": "经见秋深墨色短暂停顿换章，给大段落留出呼吸"
+  },
+  "dip-paper": {
+    "filter": "spatial",
+    "seconds": 0.47,
+    "use": "经见秋米纸色短暂停顿换章，适合浅底图文解释片"
+  },
   "desk-rise": {
     "filter": "spatial",
     "seconds": 0.7,
@@ -35,5 +70,20 @@
     "filter": "spatial",
     "seconds": 0.37,
     "use": "对准上一镜中的物件推穿，接到与它相关的下一镜"
+  },
+  "pull-back": {
+    "filter": "spatial",
+    "seconds": 0.4,
+    "use": "从细节拉远退入下一镜更宽的语境，与推穿互为呼应"
+  },
+  "iris-open": {
+    "filter": "spatial",
+    "seconds": 0.43,
+    "use": "从指定锚点平滑扩张圆形光窗露出下一镜主体"
+  },
+  "match-cut": {
+    "filter": "spatial",
+    "seconds": 0.4,
+    "use": "实拍与图形同坐标几何匹配剪辑：围绕共同焦点缩放对接并用亮环光圈硬核接力"
   }
 }

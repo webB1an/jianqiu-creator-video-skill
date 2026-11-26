@@ -1,0 +1,19 @@
+{
+  "key": "cymbal-swell-cc0",
+  "tag": "swell",
+  "title": "Reversed crash cymbal swell",
+  "author": "Virtuosity Drums contributors",
+  "page": "https://github.com/sfzinstruments/virtuosity_drums/blob/9f04cf9a734527edfbb0a4eee1f674e45bbf71bc/Samples/mid/crash/mid_crash_crash_vl2_rr1.flac",
+  "license": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "kind": "48kHz mono PCM prepared from verified CC0 1.0 acoustic instrument recording",
+  "stars": null,
+  "votes": null,
+  "duration": 0.9,
+  "anchor": 0.7450833333333333,
+  "source_sha256": "6e51e885a3f0fa3bfbad1349526e3781aefae4063f36691185bc176fad3ce588",
+  "wav_sha256": "cf35e4408dd5253c1e31d8963a8abc28ea98289092247dd6eafdfcdc1f32808b",
+  "instrument": "crash cymbal",
+  "license_page": "https://github.com/sfzinstruments/virtuosity_drums/blob/9f04cf9a734527edfbb0a4eee1f674e45bbf71bc/LICENSE",
+  "source": "https://raw.githubusercontent.com/sfzinstruments/virtuosity_drums/9f04cf9a734527edfbb0a4eee1f674e45bbf71bc/Samples/mid/crash/mid_crash_crash_vl2_rr1.flac",
+  "preparation": "highpass=f=180,atrim=duration=0.9,areverse; mono 48 kHz PCM; trim to 0.9s, scale peak to 0.82 and fade edges"
+}

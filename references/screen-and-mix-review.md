@@ -25,7 +25,7 @@ node "$SK/scripts/capture_passage.cjs" "$ARTICLE_URL" "$QUOTE" assets/report-pas
 
 从终混找一个听得出旋律的音头、一个具体动作、一个有语音的近邻窗口。在同一音量下对比，分别判断声音是否能被认出来、是否盖住字或太抢。音乐可改配器和节奏，在小扬声器能重放的区域安排标志性音符。按键、翻页和旋钮看短时瞬态及动作时机，逐个平衡；同一纸声落在语句间的效果可能比落在有声字上强很多。
 
-默认 `music_ducking: "sidechain"` 在人说话时自动压低伴奏。已经按旁白混好或使用“口播轻版”的片子，先试 `"music_ducking": "prebalanced"`，再对实际 AAC 验证。保留旁白、音乐和动作分轨，测相对于同窗语音的强弱时使用与最终导出一致的压缩与增益。整曲 RMS 和音乐 WAV 本身的电平不能代替这一步。静默留白可作为叙事设计，审片单要写清听的是哪一段。
+默认 `music_ducking: "sidechain"` 在人说话时自动压低伴奏；也支持 `"gentle"`（柔和闪避，适合慢叙事）、`"firm"`（干脆闪避，适合快节奏新闻/测评）或自定义参数字典。已经按旁白混好或使用“口播轻版”的片子，先试 `"music_ducking": "prebalanced"`，再对实际 AAC 验证。新工程建议开启 `voice_polish`（`clean`/`broadcast`/`warm`，默认关闭以兼容旧片）、`music_vocal_pocket: true`（在 2.4 kHz 给伴奏温和切出 −2.8 dB 人声清晰位），以及 `music_fade_in`/`music_fade_out` 与平滑曲线 `music_cues`（默认 `"curve": "smooth"` 等响度平滑包络），详解见[画质、转场、音画包装与节奏工艺](production-craft.md)。保留旁白、音乐和动作分轨，测相对于同窗语音的强弱时使用与最终导出一致的压缩与增益。整曲 RMS 和音乐 WAV 本身的电平不能代替这一步。静默留白可作为叙事设计，审片单要写清听的是哪一段。
 
 ```sh
 python scripts/scene_audition.py old.mp4 new.mp4 --start 2.75 --end 6.65 --output compare.wav
@@ -67,8 +67,10 @@ python scripts/scene_audition.py old.mp4 new.mp4 --start 2.75 --end 6.65 --phone
 在 `sfx.json` 写动作音。例中的 83 是动作发生在原素材中的显示帧号，从零开始计数。用本镜 `visual` 原件逐帧找接触，再试听所选录音，填入录音里选定接触峰的秒数 `anchor`。
 
 ```json
-[{"shot":"latch","at":{"source_frame":83},"key":"dial-629301","trim":[0.3,0.8],"anchor":0.378,"peak_db":-18,"pan":0,"event":"扣件接触"}]
+[{"shot":"latch","at":{"source_frame":83},"key":"dial-629301","trim":[0.3,0.8],"anchor":0.378,"peak_db":-18,"pan":0,"rate":1.0,"highpass":120,"fade_out":0.04,"event":"扣件接触"}]
 ```
+
+`soundmix.py` 还支持单条音效的 `rate`（0.5–2.0 变调变速，自动折算瞬态锚点）、`highpass`/`lowpass` 频段塑形与余弦 `fade_in`/`fade_out`。本地程序化拟音工具 `design_sound.py` 提供 11 种音效（含 `whoosh`/`pop`/`chime`/`sub_drop`/`swipe`/`snap`/`tension`）；需要快速为转场、证据窗和数字揭示起草克制音效方案时，可运行 `python scripts/sfx_scaffold.py --project . --write`。
 
 配乐和拟音都支持 `at` 或原有的 `offset`。词锚与画面动效共用准备后的词钟，同一句第二次说到同一词时用 `@lock:锁住#2`。`prepare.py` 会为配乐和拟音计划引用的台词生成词钟，逐字发声时间以本次录音或人工校准的 `word_times` 为准。用 `shift_frames` 以成片帧为单位前移或后移。先让锚点落在标注镜号内，再调整预告或余响。源帧按媒体显示时间映射，可处理可变帧率。重录、调镜长或改变入点后运行 `prepare.py`，正式导出与局部修音都会按当下的计划重算。已经混好的效果分轨沿用 `effects`；同一工程在 `effects` 与 `sfx_plan` 中选一项。候选片的 `technical.json` 在 `sfx_cues` 记下实际命中采样、取用的声音片段及素材来源。
 

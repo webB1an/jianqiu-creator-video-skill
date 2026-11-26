@@ -122,6 +122,85 @@
       "credit": "见秋",
       "theme": "light"
     },
-    "parameters": "title 写回到的事物或结果，takeaway 写本片能支持的一句话，credit 可填作者。theme 取 dark 或 light，accent 是分隔线颜色。"
+    "parameters": "title 写回到的事物或结果，takeaway 写本片能支持的一句话，也可用 items 数组（2–4 项短词条，配合可选 cues 逐项弹入防孤字），credit 可填作者，mark 为 true 时附见秋叶标。支持顶层 background 动态视频背景自动压暗循环，theme 取 dark 或 light，ambient 可设 false 关闭微推。"
+  },
+  {
+    "id": "kinetic-hook",
+    "name": "开场钩子大字",
+    "tags": [
+      "开场",
+      "钩子",
+      "大字",
+      "金句",
+      "关键词",
+      "片头",
+      "强调",
+      "透明叠加"
+    ],
+    "component": "KineticHook",
+    "description": "1–3 行错时弹入的开场钩子大字，支持指定核心词高亮底框，可实底或半透明叠在实拍片头上。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/chapter-title",
+    "implementation": "见秋钩子大字排版，使用 Remotion spring 分行弹入并同步扫出关键词高亮。",
+    "example": {
+      "kicker": "关键发现",
+      "lines": [
+        "为什么单价降了",
+        "账单反而涨了 42%？"
+      ],
+      "highlight": "涨了 42%",
+      "theme": "dark"
+    },
+    "parameters": "lines 为 1–3 行文字。kicker 可选，highlight 指定需扫亮的核心短语，cues 与 highlightFrame 可绑实读词。theme 取 dark 或 light，transparent 为 true 时叠在半透明渐变底片上。"
+  },
+  {
+    "id": "callout-annotation",
+    "name": "画面指引标注",
+    "tags": [
+      "标注",
+      "指引线",
+      "箭头",
+      "拆解",
+      "局部说明",
+      "产品细节",
+      "透明叠加"
+    ],
+    "component": "CalloutAnnotation",
+    "description": "从实拍或图纸的指定坐标画出折线指引与脉冲锚点，停稳后弹出紧凑说明牌，退场自动淡出。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/lower-third",
+    "implementation": "本地 SVG 折线路径推进与见秋牌面排版，支持与实拍底片同钟合成。",
+    "example": {
+      "target": [0.36, 0.56],
+      "labelAt": [0.58, 0.34],
+      "label": "关键卡扣",
+      "detail": "向内按压 2 mm 释放",
+      "theme": "dark"
+    },
+    "parameters": "target 为指向物体的归一化 [x,y] 坐标，label 为标题，detail 可选，labelAt 指定说明牌位置。startFrame、endFrame 控制出现与退出帧（可绑实读词）。transparent 为 true 或配 background 叠加到实拍上。"
+  },
+  {
+    "id": "sticker-callout",
+    "name": "12fps 抽帧贴纸标注",
+    "tags": [
+      "标注",
+      "贴纸",
+      "抽帧",
+      "12fps",
+      "Vox",
+      "圈选",
+      "杂志感",
+      "透明叠加"
+    ],
+    "component": "StickerCallout",
+    "description": "借鉴 Vox 标志性 12fps 刻意抽帧手工贴纸与手绘虚线圈选，叠在 30fps 流畅实拍底片上自然拉开两层运动质感层级。",
+    "reference": "https://www.remotion.dev/docs/",
+    "implementation": "本地帧步进 posterize（默认 12fps）+ spring 弹跳微抖贴纸 + SVG 弧线虚线圈选，与 30fps background 独立帧率。",
+    "example": {
+      "label": "关键突破点",
+      "detail": "12fps 贴纸 × 30fps 实拍",
+      "at": [0.64, 0.34],
+      "target": [0.36, 0.56],
+      "theme": "dark"
+    },
+    "parameters": "label 必填，detail 可选；at 为贴纸中心归一化坐标 [x,y]，target 可选指向实拍物体并画出虚线椭圆与弧线。posterizeFps 控制贴纸抽帧率（默认 12，4–30 可调），tilt 设倾角，startFrame/endFrame 控制出入场帧，强烈建议配顶层 background 实拍视频。"
   }
 ]

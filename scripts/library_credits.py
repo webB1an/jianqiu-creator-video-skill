@@ -39,10 +39,16 @@ def used_inputs(edit, timeline):
         timing = schedule[shot['id']]
         shot = motion_layers.resolve_shot(shot, timeline, timing)
         start = shot.get('in', 0)
+        speed = float(shot.get('speed', 1.0))
         # The exporter loops still images. Time ranges only apply to moving media.
         still = Path(shot['visual']).suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}
-        window = None if still else [start, start + timing['frames'] / fps]
+        window = None if still else [start, start + timing['frames'] * speed / fps]
         result.append(dict(file=shot['visual'], role='picture', shot=shot['id'], range=window))
+        if isinstance(shot.get('parallax_25d'), dict):
+            photo = shot['parallax_25d'].get('source') or shot.get('source')
+            if photo:
+                result.append(dict(file=photo, role='picture', shot=shot['id'], range=None,
+                                   frames=[timing['start_frame'], timing['start_frame'] + timing['frames']]))
         inset = spatial_bridges.window_plan(shot,timing['frames'])
         if inset is not None:
             first = timing['start_frame'] + inset['start']

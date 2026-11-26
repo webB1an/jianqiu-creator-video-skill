@@ -1,5 +1,6 @@
 """Place the transients of catalogued or project recordings at resolved picture and speech cues."""
 import json
+import math
 from pathlib import Path
 import subprocess
 import wave
@@ -26,6 +27,25 @@ def planned_effect_sources(edit, project, read_path):
             yield dict(file=str(directory / 'take.wav'), role='effects', shot=event['shot'], range=event['trim'])
 
 
+def _decode_take(path, highpass=None, lowpass=None):
+    import numpy as np
+
+    filters = []
+    if highpass is not None:
+        if not finite(highpass) or not 20 <= highpass <= 16000:
+            raise ValueError('SFX highpass must be in 20..16000 Hz')
+        filters.append(f'highpass=f={highpass:g}')
+    if lowpass is not None:
+        if not finite(lowpass) or not 100 <= lowpass <= 22000:
+            raise ValueError('SFX lowpass must be in 100..22000 Hz')
+        filters.append(f'lowpass=f={lowpass:g}')
+    cmd = ['ffmpeg', '-v', 'error', '-i', str(path)]
+    if filters:
+        cmd.extend(['-af', ','.join(filters)])
+    cmd.extend(['-ar', str(RATE), '-ac', '1', '-f', 'f32le', '-'])
+    return np.frombuffer(subprocess.check_output(cmd), '<f4')
+
+
 def render_effects(events, edit, timeline, target, pin=Path):
     import numpy as np
 
@@ -43,13 +63,14 @@ def render_effects(events, edit, timeline, target, pin=Path):
         path = pin(take_path)
         if digest(path) != meta['wav_sha256']:
             raise ValueError('Sound hash changed: ' + key)
-        take = np.frombuffer(subprocess.check_output([
-            'ffmpeg', '-v', 'error', '-i', str(path), '-ar', str(RATE), '-ac', '1', '-f', 'f32le', '-'
-        ]), '<f4')
+        take = _decode_take(path, event.get('highpass'), event.get('lowpass'))
         a, b = event['trim']
         anchor, peak_db, pan = event['anchor'], event['peak_db'], event.get('pan', 0)
-        if not all(finite(v) for v in (a, b, anchor, peak_db, pan)) or not 0 <= a <= anchor < b:
+        rate = event.get('rate', 1.0)
+        if not all(finite(v) for v in (a, b, anchor, peak_db, pan, rate)) or not 0 <= a <= anchor < b:
             raise ValueError('Invalid source range or gain for ' + key)
+        if not 0.5 <= rate <= 2.0:
+            raise ValueError('SFX playback rate must be in [0.5, 2.0]: ' + key)
         if not -1 <= pan <= 1:
             raise ValueError('Pan must be in [-1,1]')
         if b > len(take) / RATE + .0001:
@@ -58,31 +79,45 @@ def render_effects(events, edit, timeline, target, pin=Path):
         clip = take[source_start:round(b * RATE)].copy()
         if len(clip) == 0 or np.max(abs(clip)) <= .001:
             raise ValueError('Empty sound excerpt: ' + key)
-        clip *= 10**(peak_db / 20) / np.max(abs(clip))
-        fade = min(200, len(clip) // 2)
-        if fade:
-            clip[:fade] *= np.linspace(0, 1, fade)
-            clip[-fade:] *= np.linspace(1, 0, fade)
+        if rate != 1.0:
+            positions = np.arange(0, len(clip) - 1, rate, dtype=np.float64)
+            clip = np.interp(positions, np.arange(len(clip), dtype=np.float64), clip).astype(np.float32)
+            if len(clip) == 0 or np.max(abs(clip)) <= .001:
+                raise ValueError('Resampled sound excerpt is empty: ' + key)
+        clip *= 10 ** (peak_db / 20) / np.max(abs(clip))
+        default_fade = min(200, len(clip) // 2)
+        fade_in_n = min(len(clip) // 2, round(float(event['fade_in']) * RATE)) if 'fade_in' in event else default_fade
+        fade_out_n = min(len(clip) // 2, round(float(event['fade_out']) * RATE)) if 'fade_out' in event else default_fade
+        if fade_in_n < 0 or fade_out_n < 0:
+            raise ValueError('SFX fade_in and fade_out must be nonnegative')
+        if fade_in_n:
+            clip[:fade_in_n] *= (0.5 * (1.0 - np.cos(np.pi * np.linspace(0, 1, fade_in_n)))).astype(np.float32)
+        if fade_out_n:
+            clip[-fade_out_n:] *= (0.5 * (1.0 + np.cos(np.pi * np.linspace(0, 1, fade_out_n)))).astype(np.float32)
         timing = schedule.get(event.get('shot'))
         if timing is None or ('offset' not in event and 'at' not in event):
             raise ValueError('Give the effect a prepared shot and cue at or offset')
         cue = cue_sample(event, edit, timeline, timing, pin)
-        # Retain the legacy nearest-sample quantization when both values are in seconds.
-        if 'at' not in event and not event.get('shift_frames'):
+        # Anchor offset scales inversely with playback rate so the transient still hits the exact cue.
+        anchor_offset = round((anchor - a) / rate * RATE)
+        if 'at' not in event and not event.get('shift_frames') and rate == 1.0:
             start = round((timing['start_frame'] / timeline['fps'] + event['offset'] - anchor + a) * RATE)
         else:
-            start = cue - round(anchor * RATE) + source_start
+            start = cue - anchor_offset
         end = start + len(clip)
         if start < 0 or end > len(bus):
             raise ValueError('Sound extends outside timeline: ' + key)
-        bus[start:end] += clip[:, None] * np.sqrt([(1-pan)/2, (1+pan)/2])
-        log.append(dict(key=key, event=event['event'], shot=timing['id'], cue=round(cue/RATE, 3),
-                        cue_sample=cue, programme_samples=[start, end],
-                        range=[source_start/RATE, (source_start+len(clip))/RATE],
-                        file=str(take_path if directory == local else Path('@skill') / local / 'take.wav'),
-                        anchor=event.get('at', event.get('offset')), shift_frames=event.get('shift_frames', 0),
-                        take_anchor_seconds=anchor, wav_sha256=meta['wav_sha256'], license=meta.get('license'),
-                        page=meta['page'], stars=meta['stars'], votes=meta['votes'], author=meta['author']))
+        bus[start:end] += clip[:, None] * np.sqrt([(1 - pan) / 2, (1 + pan) / 2])
+        entry = dict(key=key, event=event['event'], shot=timing['id'], cue=round(cue / RATE, 3),
+                     cue_sample=cue, programme_samples=[start, end],
+                     range=[source_start / RATE, round(b * RATE) / RATE],
+                     file=str(take_path if directory == local else Path('@skill') / local / 'take.wav'),
+                     anchor=event.get('at', event.get('offset')), shift_frames=event.get('shift_frames', 0),
+                     take_anchor_seconds=anchor, wav_sha256=meta['wav_sha256'], license=meta.get('license'),
+                     page=meta['page'], stars=meta['stars'], votes=meta['votes'], author=meta['author'])
+        if rate != 1.0:
+            entry['rate'] = rate
+        log.append(entry)
     if not np.isfinite(bus).all() or np.abs(bus).max() > 1:
         raise ValueError('Effects stem clips')
     with wave.open(str(target), 'wb') as writer:

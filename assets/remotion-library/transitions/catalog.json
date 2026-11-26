@@ -257,5 +257,96 @@
       "incoming"
     ],
     "exampleCredit": "示例摄影：NASA / Neil Armstrong、Buzz Aldrin（阿波罗 11 号任务）。"
+  },
+  {
+    "id": "whip-pan",
+    "name": "方向模糊甩镜",
+    "tags": [
+      "甩镜",
+      "横甩",
+      "运动模糊",
+      "快切",
+      "转场",
+      "动感"
+    ],
+    "component": "WhipPan",
+    "description": "带缓动速度曲线与峰值方向模糊的快速甩镜换场，起止两帧保持清晰。",
+    "reference": "https://www.remotion.dev/docs/transitions/",
+    "implementation": "本地 Remotion Sequence + SVG feGaussianBlur 方向模糊 + Easing.inOut(cubic)。",
+    "example": {
+      "outgoing": "@library/media/examples/as11-40-5903.jpg",
+      "incoming": "@library/media/examples/as11-40-5878.jpg",
+      "direction": "from-right",
+      "outAnchor": [
+        0.5,
+        0.25
+      ]
+    },
+    "parameters": "outgoing、incoming 指向两段本地素材。direction 取 from-right、from-left、from-top、from-bottom。atFrame、overlap 设定转场位置与重叠帧数，blur 控制峰值模糊强度（默认 24）。",
+    "media": [
+      "outgoing",
+      "incoming"
+    ],
+    "exampleCredit": "示例摄影：NASA / Neil Armstrong、Buzz Aldrin（阿波罗 11 号任务）。"
+  },
+  {
+    "id": "blur-dissolve",
+    "name": "光学离焦叠化",
+    "tags": [
+      "离焦",
+      "失焦",
+      "虚化",
+      "转场",
+      "叠化",
+      "时间跨度",
+      "电影感"
+    ],
+    "component": "BlurDissolve",
+    "description": "上一景柔和虚化退场，下一景由虚入实清晰落焦，适合跨时空或跨章节切换。",
+    "reference": "https://www.remotion.dev/docs/transitions/",
+    "implementation": "本地 Remotion Sequence + 同步双层 CSS 离焦与缓动叠化。",
+    "example": {
+      "outgoing": "@library/media/examples/as11-40-5903.jpg",
+      "incoming": "@library/media/examples/as11-40-5878.jpg",
+      "outAnchor": [
+        0.5,
+        0.25
+      ]
+    },
+    "parameters": "outgoing、incoming 指向两段本地素材。atFrame、overlap 设定转场位置与重叠帧数，blur 控制峰值虚化像素（默认 18）。",
+    "media": [
+      "outgoing",
+      "incoming"
+    ],
+    "exampleCredit": "示例摄影：NASA / Neil Armstrong、Buzz Aldrin（阿波罗 11 号任务）。"
+  },
+  {
+    "id": "match-cut-ring",
+    "name": "几何圆环匹配剪辑",
+    "tags": [
+      "匹配剪辑",
+      "Match Cut",
+      "实拍转图形",
+      "几何接力",
+      "圆环",
+      "同坐标",
+      "转场"
+    ],
+    "component": "MatchCutRing",
+    "description": "实拍↔图形同坐标硬核匹配剪辑：前后两镜围绕共同锚点坐标联动缩放，并用旋转双色几何亮环光圈完成视觉接力。",
+    "reference": "https://www.remotion.dev/docs/transitions/",
+    "implementation": "本地 Remotion Sequence + 同坐标锚点缩放 + CSS 圆形裁剪光圈 + 旋转双色 SVG 几何环。",
+    "example": {
+      "outgoing": "@library/media/examples/as11-40-5903.jpg",
+      "incoming": "@library/media/examples/as11-40-5878.jpg",
+      "anchor": [0.5, 0.48],
+      "zoom": 1.42
+    },
+    "parameters": "outgoing、incoming 指向两段本地素材（如实拍特写接数据环形图）。anchor 为两镜共享焦点归一化坐标 [x,y]，zoom 控制联动缩放倍率（默认 1.42），radius 控制初始亮环半径，accent 设亮环主色，atFrame 与 overlap 控制转场起止帧。",
+    "media": [
+      "outgoing",
+      "incoming"
+    ],
+    "exampleCredit": "示例摄影：NASA / Neil Armstrong、Buzz Aldrin（阿波罗 11 号任务）。"
   }
 ]

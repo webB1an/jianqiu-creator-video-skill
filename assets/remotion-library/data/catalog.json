@@ -2,56 +2,100 @@
   {
     "id": "stat-counter",
     "name": "数字滚动落定",
-    "tags": ["数据", "计数", "累计", "金额", "单一指标", "数字滚动", "里程碑"],
+    "tags": ["数据", "计数", "累计", "金额", "单一指标", "数字滚动", "里程碑", "深色"],
     "component": "StatCounter",
-    "description": "将一个累计值从起点滚到本期准确终值，末段留给观众核对单位。",
+    "description": "将一个累计值从起点滚到本期准确终值，支持深浅主题、变化徽章与进度基线，末段留给观众核对单位。",
     "reference": "https://www.reactvideoeditor.com/remotion-templates/stat-counter",
-    "implementation": "本地数据排版调用 Remotion interpolate / Easing，落稳帧直接显示原始终值。",
-    "example": {"title": "三笔报销合计", "from": 280, "to": 420, "unit": "元"},
-    "parameters": "to 为有限终值，from 默认为 0。title、unit、color、decimals 可选。startFrame 和 settleFrame 是镜内开始、落稳帧；默认从首帧开始，在约 69% 处停稳。"
+    "implementation": "本地数据排版调用 Remotion interpolate / spring / Easing，落稳帧直接显示原始终值。",
+    "example": {"title": "三笔报销合计", "subtitle": "含遗漏车费后的复算结果", "from": 280, "to": 420, "unit": "元", "delta": "+140 元", "theme": "dark"},
+    "parameters": "to 为有限终值，from 默认为 0。title、subtitle、source、unit、delta、color、decimals 可选。theme 取 light（默认）或 dark，transparent 为 true 可透明叠底。startFrame 和 settleFrame 是镜内开始、落稳帧。"
   },
   {
     "id": "bar-chart",
     "name": "同尺度横条比较",
-    "tags": ["数据", "对比", "条形图", "柱状图", "条图", "排名", "正负", "两组"],
+    "tags": ["数据", "对比", "条形图", "柱状图", "条图", "排名", "正负", "两组", "深色"],
     "component": "BarChart",
-    "description": "各行沿同一条零轴伸展，保留正负方向和统一刻度，行末列出原值。",
+    "description": "各行沿同一条零轴伸展，带底轨与重点高亮，保留正负方向和统一刻度，行末列出原值。",
     "reference": "https://www.reactvideoeditor.com/remotion-templates/chart-animation",
     "implementation": "本地共用零轴和见秋排版，Remotion interpolate 根据每行真实数值求长度与入场进度。",
-    "example": {"title": "两次读取耗时", "unit": "秒", "items": [{"label": "首次读取", "value": 9.2}, {"label": "再次读取", "value": 3.4}]},
-    "parameters": "items 传 1–6 行，每行含 label、数值 value 和可选 color。title、unit、decimals、startFrame、settleFrame 可选。"
+    "example": {"title": "两次读取耗时", "unit": "秒", "highlight": 1, "items": [{"label": "首次读取", "value": 9.2}, {"label": "再次读取", "value": 3.4}]},
+    "parameters": "items 传 1–6 行，每行含 label、数值 value 和可选 color。highlight 指定重点行索引。title、subtitle、source、unit、decimals、theme（light/dark）、transparent、startFrame、settleFrame 可选。"
   },
   {
     "id": "line-chart",
     "name": "实测趋势折线",
-    "tags": ["数据", "趋势", "折线图", "时间序列", "按时间变化", "走势", "描线"],
+    "tags": ["数据", "趋势", "折线图", "时间序列", "按时间变化", "走势", "描线", "标注"],
     "component": "LineChart",
-    "description": "沿原始观测点连成的折线逐步描出走势，保留负值、首尾刻度和单位。",
+    "description": "沿原始观测点连成的折线逐步描出走势并铺渐变底影，支持关键拐点标注、负值与首尾刻度。",
     "reference": "https://www.reactvideoeditor.com/remotion-templates/line-chart",
-    "implementation": "使用 @remotion/paths 的 evolvePath，配合 Remotion interpolate 映射真实横纵坐标。",
-    "example": {"title": "设备温度", "unit": "℃", "items": [{"x": 0, "label": "0 秒", "value": 21}, {"x": 2, "label": "2 秒", "value": 28}, {"x": 7, "label": "7 秒", "value": 26}, {"x": 12, "label": "12 秒", "value": 34}]},
-    "parameters": "items 传 2–240 个 label、value 点。各点给单调递增的数值 x 可保留非等间隔；省略全部 x 时等距。首尾 label 上屏。title、unit、color、decimals、startFrame、settleFrame 可选。"
+    "implementation": "使用 @remotion/paths 的 evolvePath，配合 Remotion interpolate 映射真实横纵坐标与渐变面积。",
+    "example": {"title": "设备温度", "unit": "℃", "theme": "dark", "items": [{"x": 0, "label": "0 秒", "value": 21}, {"x": 2, "label": "2 秒", "value": 28}, {"x": 7, "label": "7 秒", "value": 26}, {"x": 12, "label": "12 秒", "value": 34}], "annotations": [{"index": 1, "label": "首峰", "value": "28℃"}]},
+    "parameters": "items 传 2–240 个 label、value 点，可选递增 x。annotations 为 [{index, label, value}] 拐点标注。title、subtitle、source、unit、color、theme（light/dark）、transparent、decimals、startFrame、settleFrame 可选。"
   },
   {
     "id": "donut-chart",
     "name": "构成占比环",
     "tags": ["数据", "占比", "构成", "圆环", "环形图", "百分比", "比例", "饼图"],
     "component": "DonutChart",
-    "description": "各部分按同一分母依次展开，同时保留中心合计与图例百分比。",
+    "description": "各部分按同一分母依次展开，支持高亮关键份额，同时保留中心合计与图例百分比。",
     "reference": "https://www.reactvideoeditor.com/remotion-templates/donut-chart",
     "implementation": "复用 @remotion/shapes 的 makePie 生成各段精确圆弧，用 Remotion interpolate 驱动依次展开。",
-    "example": {"title": "这批样本的构成", "unit": "份", "items": [{"label": "已核对", "value": 42}, {"label": "待核对", "value": 18}, {"label": "需补录", "value": 10}]},
-    "parameters": "items 传 1–6 个互斥类别，每项含 label、非负 value 和可选 color。总量须大于 0。title、unit、decimals（总量读数）、startFrame、settleFrame 可选。"
+    "example": {"title": "这批样本的构成", "unit": "份", "highlight": 0, "items": [{"label": "已核对", "value": 42}, {"label": "待核对", "value": 18}, {"label": "需补录", "value": 10}]},
+    "parameters": "items 传 1–6 个互斥类别，每项含 label、非负 value 和可选 color。highlight 指定重点分块索引。title、subtitle、source、unit、theme（light/dark）、transparent、decimals、startFrame、settleFrame 可选。"
   },
   {
     "id": "progress-steps",
     "name": "步骤交接与卡词",
     "tags": ["流程", "步骤", "进度", "工序", "状态变化", "节点", "逐项揭示"],
     "component": "ProgressSteps",
-    "description": "提前交代流程全貌，连线向下一步伸展，在该步的口播落点切换状态。",
+    "description": "提前交代流程全貌，连线向下一步伸展，已完成步打勾，在该步的口播落点切换高亮状态。",
     "reference": "https://www.reactvideoeditor.com/remotion-templates/progress-steps",
     "implementation": "Remotion useCurrentFrame 和 interpolate 读取步骤帧与连线进度，标签沿共享时间线排版。",
     "example": {"title": "一个包裹如何入站", "steps": ["包裹到站", "站内扫码入库", "系统发出取件码"]},
-    "parameters": "steps 是 2–6 个步骤名称。可用等长、逐个不早于前一项的 cues 帧号数组指定实际动作或实读帧；省略时在 startFrame 与 settleFrame 间均分。title、color 可选。"
+    "parameters": "steps 是 2–6 个步骤名称。cues 为等长递增帧号数组，可绑定实读词。title、subtitle、source、color、theme（light/dark）、transparent、startFrame、settleFrame 可选。"
+  },
+  {
+    "id": "metric-grid",
+    "name": "多指标卡网格",
+    "tags": ["数据", "KPI", "多指标", "卡片", "摘要", "对比", "数字", "网格"],
+    "component": "MetricGrid",
+    "description": "同屏呈现 2–4 个核心指标卡，按口播落点弹性逐张入场，可突出单一主指标与变化幅度。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/stat-counter",
+    "implementation": "见秋多指标卡排版，调用 Remotion spring 驱动各卡按 cues 错时入场。",
+    "example": {"title": "本次实测核心读数", "theme": "dark", "items": [{"label": "冷启动耗时", "value": "14.8", "unit": "秒"}, {"label": "复测耗时", "value": "8.6", "unit": "秒", "delta": "缩短 42%", "highlight": true}, {"label": "峰值内存", "value": "312", "unit": "MB"}]},
+    "parameters": "items 传 2–4 个对象（label、value，可选 unit、delta、highlight、color）。cues 为每张卡入场帧号，可绑词锚。title、subtitle、source、theme（light/dark）、transparent 可选。"
+  },
+  {
+    "id": "comparison-table",
+    "name": "逐行对比表格",
+    "tags": ["数据", "表格", "对比表", "参数对比", "规格", "优劣", "逐行揭示", "横评"],
+    "component": "ComparisonTable",
+    "description": "2–4 列编辑级参数对照表，按行随口播落点依次浮现，可高亮结论列。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/chart-animation",
+    "implementation": "见秋对齐表排版，使用 Remotion interpolate 按行触发逐项显现。",
+    "example": {"title": "两套方案关键差异", "theme": "dark", "highlightCol": 2, "columns": ["指标", "旧版本", "新版本"], "rows": [["单次导出", "42 秒", "16 秒"], ["字幕避让", "手工定位", "自动避让"], ["响度校准", "单遍近似", "双遍 -16 LUFS"]]},
+    "parameters": "columns 为 2–4 个列标题，rows 为 1–6 行字符串数组。highlightCol 指定重点列索引，cues 为各行出现帧号。title、subtitle、source、theme（light/dark）、transparent 可选。"
+  },
+  {
+    "id": "timeline-strip",
+    "name": "横向时间轴节点",
+    "tags": ["时间轴", "历程", "发展史", "里程碑", "日期", "事件", "脉络"],
+    "component": "TimelineStrip",
+    "description": "沿主轴逐段推进并点亮 2–5 个日期节点，清晰交代事件先后与关键转折。",
+    "reference": "https://www.reactvideoeditor.com/remotion-templates/progress-steps",
+    "implementation": "见秋时间线排版，使用 Remotion interpolate 同步推进主轴与各节点卡点。",
+    "example": {"title": "三次关键节点", "theme": "dark", "items": [{"date": "2024.03", "title": "初版发布", "detail": "单轨合成"}, {"date": "2025.06", "title": "词时钟接入", "detail": "按实读卡点"}, {"date": "2026.11", "title": "全链升级", "detail": "镜头与终混协同"}]},
+    "parameters": "items 传 2–5 个节点（date、title，可选 detail）。cues 为各节点亮起帧号，可绑实读词。title、subtitle、source、color、theme（light/dark）、transparent 可选。"
+  },
+  {
+    "id": "exploded-diagram",
+    "name": "2.5D 矢量结构爆炸拆解",
+    "tags": ["数据", "架构", "拆解", "爆炸图", "2.5D", "分层", "原理", "回形针"],
+    "component": "ExplodedDiagram",
+    "description": "将 2–6 层等轴测技术架构或装置堆栈弹性垂直炸开，随口播节点依次浮升点亮各层并引出右侧折线标注，适合原理与系统架构拆解。",
+    "reference": "https://www.remotion.dev/docs/",
+    "implementation": "见秋等轴测 2.5D SVG 分层引擎，使用 Remotion spring 驱动爆炸展开与逐层浮升呼吸。",
+    "example": {"title": "系统四层结构拆解", "theme": "dark", "layers": [{"tag": "UI", "label": "交互表现层", "detail": "字幕避让与动效合成"}, {"tag": "LOGIC", "label": "推理编排层", "detail": "多智能体任务路由"}, {"tag": "VERIFY", "label": "形式化校验层", "detail": "逐行机器核验"}, {"tag": "METAL", "label": "算力底座", "detail": "集群并行计算"}]},
+    "parameters": "layers 传 2–6 层对象（label 必填，tag、detail、color 可选）。explodeFrame 控制炸开起始帧，cues 为各层高亮帧号数组（可绑实读词）。支持顶层 background 动态视频叠加、theme（light/dark）、transparent。"
   }
 ]

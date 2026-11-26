@@ -22,10 +22,20 @@ class Bridge:
     handles: str
     anchor: tuple | None = None
     zoom: float | None = None
+    settle: float | None = None
+
+
+def shot_speed(shot):
+    speed = shot.get('speed', 1.0)
+    if type(speed) not in (int, float) or not math.isfinite(speed) or not 0.25 <= speed <= 8.0:
+        raise ValueError(f"{shot['id']}: shot speed must be between 0.25 and 8.0")
+    return float(speed)
 
 
 def source_room(shot, frames, fps, source_path, durations):
     """Available real source frames on either side of the scheduled picture."""
+    if 'parallax_25d' in shot:
+        return 0, 0
     path = Path(shot['visual'])
     if path.suffix.lower() in STILLS:
         return math.inf, math.inf
@@ -69,8 +79,9 @@ def source_room(shot, frames, fps, source_path, durations):
     # Round only numerical noise from a rolling edit expressed as source seconds.
     epsilon = Fraction(1, 10**7)
     first, end = durations[key]
-    before = max(0, math.floor(min(start, start - first) + epsilon))
-    after = max(0, math.floor(end - start - frames + epsilon))
+    speed = Fraction(str(shot_speed(shot)))
+    before = max(0, math.floor(min(start, start - first) / speed + epsilon))
+    after = max(0, math.floor((end - start) / speed - frames + epsilon))
     if 'source_handle_frames' in shot:
         limit = shot['source_handle_frames']
         if not isinstance(limit, list) or len(limit) != 2 or any(type(v) is not int or v < 0 for v in limit):
@@ -103,14 +114,26 @@ def plan_bridges(shots, times, fps, *, default_handles='hold', source_path=Path,
         if not math.isfinite(seconds) or seconds <= 0:
             raise ValueError(f'Invalid transition duration at {shot["id"]}')
         count = round(seconds * fps)
-        anchor, zoom = None, None
-        if name == 'push-through':
-            anchor, zoom = opt.get('at',[.5,.5]), opt.get('zoom',2.0)
-            if (not isinstance(anchor,list) or len(anchor)!=2 or
-                    not all(type(v) in (float,int) and 0<=v<=1 for v in anchor)):
-                raise ValueError('push-through.at must locate a point inside the output frame')
-            if type(zoom) not in (float,int) or not math.isfinite(zoom) or zoom <= 1:
-                raise ValueError('push-through.zoom must be greater than 1')
+        anchor, zoom, settle = None, None, None
+        if name in ('push-through', 'pull-back', 'match-cut'):
+            default_zoom = 1.45 if name == 'match-cut' else 2.0
+            anchor, zoom = opt.get('at', [.5, .5]), opt.get('zoom', default_zoom)
+            if (not isinstance(anchor, list) or len(anchor) != 2 or
+                    not all(type(v) in (float, int) and 0 <= v <= 1 for v in anchor)):
+                raise ValueError(f'{name}.at must locate a point inside the output frame')
+            if type(zoom) not in (float, int) or not math.isfinite(zoom) or zoom <= 1:
+                raise ValueError(f'{name}.zoom must be greater than 1')
+            if 'settle' in opt:
+                settle = opt['settle']
+                if type(settle) not in (float, int) or not math.isfinite(settle) or not 1.0 <= settle <= 2.0:
+                    raise ValueError(f'{name}.settle must be between 1.0 and 2.0')
+                settle = float(settle)
+            anchor = tuple(anchor)
+        elif name == 'iris-open':
+            anchor = opt.get('at', [.5, .5])
+            if (not isinstance(anchor, list) or len(anchor) != 2 or
+                    not all(type(v) in (float, int) and 0 <= v <= 1 for v in anchor)):
+                raise ValueError('iris-open.at must locate a point inside the output frame')
             anchor = tuple(anchor)
         if handles == 'auto':
             incoming, _ = source_room(shot, times[i]['frames'], fps, source_path, durations)
@@ -133,7 +156,7 @@ def plan_bridges(shots, times, fps, *, default_handles='hold', source_path=Path,
             raise ValueError(f'Transition does not fit near {shot["id"]}')
         if edges[i-1] and edges[i-1].right + left > times[i-1]['frames']:
             raise ValueError(f'Overlapping transition windows in {shots[i-1]["id"]}')
-        edges.append(Bridge(name, left, right, handles, anchor, zoom))
+        edges.append(Bridge(name, left, right, handles, anchor, zoom, settle))
     return edges
 
 
@@ -148,7 +171,7 @@ def source_handles(shots, edges, i):
     return before, after
 
 
-def stitch(folder, shots, times, fps, ff, probe, *, edges=None, source_path=Path, windows_receipt=None):
+def stitch(folder, shots, times, fps, ff, probe, *, edges=None, source_path=Path, windows_receipt=None, proxy=False):
     edges = plan_bridges(shots, times, fps) if edges is None else edges
     windows = [spatial_bridges.window_plan(s,t['frames']) for s,t in zip(shots,times)]
     ends = [i for i in range(1,len(shots)) if edges[i] is None]+[len(shots)]
@@ -199,7 +222,8 @@ def stitch(folder, shots, times, fps, ff, probe, *, edges=None, source_path=Path
                 accumulated += times[k]['frames']
                 label = f'm{k}'
             output = f'group{start:04}.mp4'
-            ff(*inputs,'-filter_complex_threads',2,'-filter_complex',';'.join(graph),'-map',f'[{label}]','-frames:v',accumulated,'-r',fps,'-an','-pix_fmt','yuv420p','-c:v','libx264','-preset','veryfast','-crf',16,*FLAGS,output,cwd=folder)
+            preset, crf = ('ultrafast', 23) if proxy else ('veryfast', 16)
+            ff(*inputs,'-filter_complex_threads',2,'-filter_complex',';'.join(graph),'-map',f'[{label}]','-frames:v',accumulated,'-r',fps,'-an','-pix_fmt','yuv420p','-c:v','libx264','-preset',preset,'-crf',crf,*FLAGS,output,cwd=folder)
             if int(probe(folder/output)['streams'][0]['nb_frames'])!=accumulated:
                 raise ValueError('Transition group changed the scheduled frame count')
             listing.append(output)
@@ -218,5 +242,9 @@ def stitch(folder, shots, times, fps, ff, probe, *, edges=None, source_path=Path
                             cut_frame=times[k]['start_frame'], handles=edge.handles,
                             outgoing_source_frames=postroll, incoming_source_frames=preroll))
         if edge.anchor is not None:
-            bridges[-1].update(at=list(edge.anchor),zoom=edge.zoom)
+            bridges[-1]['at'] = list(edge.anchor)
+        if edge.zoom is not None:
+            bridges[-1]['zoom'] = edge.zoom
+        if edge.settle is not None:
+            bridges[-1]['settle'] = edge.settle
     return bridges

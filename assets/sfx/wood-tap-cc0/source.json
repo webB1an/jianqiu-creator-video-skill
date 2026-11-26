@@ -1,0 +1,19 @@
+{
+  "key": "wood-tap-cc0",
+  "tag": "wood-tap",
+  "title": "Marimba wooden-bar tap",
+  "author": "VCSL contributors",
+  "page": "https://github.com/sgossner/VCSL/blob/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Marimba/Marimba_hit_Outrigger_F3_soft_01.wav",
+  "license": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "kind": "48kHz mono PCM prepared from verified CC0 1.0 acoustic instrument recording",
+  "stars": null,
+  "votes": null,
+  "duration": 0.28,
+  "anchor": 0.09327083333333333,
+  "source_sha256": "6eb7ccf5fa10b1bdaf10f0cc7a50d8c42ef086636a9e88c6527fb3af58e5ee1f",
+  "wav_sha256": "5f9fd1c4657d329c3f8540bb364c49de813c32963c00744dc599faf38b521f08",
+  "instrument": "marimba",
+  "license_page": "https://github.com/sgossner/VCSL/blob/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/LICENSE",
+  "source": "https://raw.githubusercontent.com/sgossner/VCSL/c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e/Idiophones/Struck%20Idiophones/Marimba/Marimba_hit_Outrigger_F3_soft_01.wav",
+  "preparation": "highpass=f=95; mono 48 kHz PCM; trim to 0.28s, scale peak to 0.82 and fade edges"
+}

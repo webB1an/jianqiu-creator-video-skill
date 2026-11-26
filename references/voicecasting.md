@@ -57,17 +57,30 @@ Python 环境用 skill 的 scripts/requirements.txt。将一条或多条完整�
 
 ### 多音字、短尾音与最终成片
 
-新工程遇到“重写”“三行数字”“长任务”等明确语境时，prepare 会应用已登记的声韵调。对“重读”“一行人”等需要结合含义判断的词会列为审听项。项目显式提供的录音或发音指示优先。
+#### 为什么 ZipVoice 会读错多音字（根因与三类雷区）
 
-普通话中的“重写”读 chóng xiě，“三行数字”读 sān háng。相同汉字也能代表其他读音。准备后查看时间线的 `pronunciation_review`，它逐句列出可能的歧义和原录音。根据上下文检查模型词典的实际音素，尤其留意“了当”这样的跨词错误切分。review 会把清单放进本次候选的 `content-check.json`，同时保留原版的逐句终混回译。
+本机 ZipVoice 中文前端（sherpa-onnx `phrase-matcher.cc`）没有上下文神经 G2P，而是按标点断句后对 `lexicon.txt` 做**前向最长贪婪匹配（最大 10 字）+ 单字默认音回退**。因此多音字读错几乎全部来自三类可预测的机制：
 
-要保留原文且指定读音，可以给目标句写 `pronunciation.phones`。下面的音素来自当前 ZipVoice Mandarin 词表，`h0 ang2` 对应 háng。普通合成流程会在工程内建立独立词表，把该句目标词锁定到这些声母、韵母与声调。正文、字幕继续使用 `text`。
+1. **跨词贪婪误切（`cross_word_collision`）**：前一个词的尾字与后一个多音词的首字凑成了词表里的另一个词，导致前向匹配抢先切走。典型真例：「搭出行列式」被切成 `搭 + 出行(chū xíng) + 列 + 式`（吞掉原本在词表里的 `行列式 háng liè shì`）；「公理干不干净」被切成 `干(gàn) + 不干(bú gàn) + 净`（吞掉 `干净 gān jìng`）；「结束了当天」被切成 `结束 + 了当(liǎo dàng) + 天`。
+2. **词表缺复合词，回退到单字默认音（`single_char_fallback`）**：ZipVoice 单字默认音对很多高频多音字偏向另一读音——例如 `行=xíng`、`重=zhòng`、`长=zhǎng`、`干=gàn`、`差=chà`、`切=qiè`、`调=diào`、`弹=dàn`、`乐=lè`、`校=xiào`。一旦新复合词不在 `lexicon.txt` 中（如「万行」「链长」「多长」「重算」「重写」「切换」「调参」「弹窗」「背景乐」），引擎就会直接套用错误的单字默认音。
+3. **上游词表默认音本身偏误或随语境变化（`wrong_lexicon_default`）**：例如上游 `lexicon.txt` 将「相差/反差/落差/温差/时差」标为 `chà`（标准普通话为 `chā`）、「一行/三行/五行」标为 `xíng`、「总长」标为 `zǒng zhǎng`、「倒数」标为 `dào shǔ`、「净得」标为轻声 `de`。
 
-```json
-{"text":"我把三行放在一起看。","spoken":"我把三行放在一起看。","pronunciation":{"phones":{"三行":"s0 an1 h0 ang2"},"require":[["三行","三航"],"一起看"]}}
-```
+#### 多音字四步防错闭环
 
-`require` 用于复核关键读词或金额的完整性。一个嵌套数组接受若干近音转写。读音依据要另外保留原生词典命中的音素，或同声线正误读音对听。可用 `JianqiuVoice(pronunciation_lexicon=..., trace_phonemes=True)` 让本机引擎打印实际 token。需要声学比较时截取目标字的时间窗，保留足够的前后文，以相同办法提取正反参照。两个读音只在声调上有别时，还应核对基频走势。
+1. **配音前自动词表预检（必跑）**：写完 `edit.json` 后、运行 `prepare.py` 之前，先执行词表切分审计（`prepare.py --audit` 也会内置执行同一检查）：
+   ```sh
+   "$HOME/.cache/creator-video-env/bin/python" "$HOME/.codex/skills/creator-video/scripts/pronunciation_review.py" --project .
+   ```
+   工具会模拟 ZipVoice 真实前向最长匹配，逐句报出三类风险（`cross_word_collision`、`wrong_lexicon_default`、`single_char_fallback`）以及对应的默认音素和修正建议。
+2. **明确语境自动保底 + 歧义词显式锁定 `pronunciation.phones`**：`prepare.py` 会先通过 `with_context_directions` 对无歧义语境（如「行列式」「万行/三行代码」「重写/重算/重构」「链长/帧长/多长」「干不干净」「相差/反差」「切换/切回」「调优/调参」「弹窗」「背景乐」等）自动注入标准音素，且不会覆盖作者手写的 `pronunciation.phones`。其余命中风险或语境敏感词（如「一行人」vs「一行字」、「总长」、「倒数」、「重读」），一律在对应句子的 `pronunciation.phones` 中显式锁定完整词组：
+   ```json
+   {"text":"从10月6日搭出行列式，到10月20日切入素数求和，","spoken":"从十月六日搭出行列式，到十月二十日切入素数求和，","pronunciation":{"phones":{"行列式":"h0 ang2 l0 ie4 sh0 i4"}}}
+   ```
+   `DirectedVoice` 会为每个定向词组生成独立的临时单字别名并写入工程内词表，**从根源上阻断跨词贪婪粘连**，同时正文与字幕继续使用 `text`。**禁止**为了绕开报错把句子改绑为未经 `DirectedVoice` 生成的裸 `line.audio`——那样会跳过自动保底与定向词表。
+3. **合成后用音素追踪核验，绝不单靠 ASR 判读音**：SenseVoice 等中文 ASR 具备语言模型纠错，常把读错的 `zhǎng/cháng`、`zhòng/chóng`、`gàn/gān` 自动转写成正确汉字，**只看 ASR 相似度 95%+ 无法发现多音字错读**。必须：
+   - 对所有改动句用 `JianqiuVoice(pronunciation_lexicon=..., trace_phonemes=True)` 核对引擎实际送入模型的音素序列；
+   - 查看 `timeline.json → pronunciation_review` 与 `content-check.json → pronunciation_review` 确认 `lexicon_risks` 为空或已逐项处置。
+4. **成片终混抽听复核**：导出候选后运行 `review.py --media 候选.mp4 --listen-term <多音词>` 抽出最终混音里的完整原句，由人工实听确认声调与自然度；两个读音仅差声调时，可叠加基频曲线对照同声线正反参照。`require` 字段用于复核关键读词或金额的完整性（嵌套数组接受近音转写）。
 
 句末最后一个字常被识别器提前猜中。干声检查会同时保存最后一个识别时间戳到有效声尾的距离、尾音离文件边界的余量。小于约 0.10 秒且声音紧贴文件末尾会进入复查，这个量受识别器时间分辨率和具体音节影响。对“票”这样的复合韵母，观察送气之后的有声音节能否展开和衰减，再跟同一说话人的完整“票”比较。
 

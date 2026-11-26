@@ -35,6 +35,7 @@ def observations(pcm, rate):
                           '-i','pipe:0','-ar','16000','-f','f32le','pipe:1'],
                          input=np.asarray(pcm,dtype='<i2').tobytes(),stdout=subprocess.PIPE,check=True).stdout
     samples = np.frombuffer(raw, dtype='<f4')
+    duration = len(pcm) / rate
     hz, pos = 16000, 0
     observed = []
     while pos < len(samples):
@@ -45,14 +46,16 @@ def observations(pcm, rate):
             energy = np.mean(runs*runs, axis=1)
             step = int(np.argmin(np.convolve(energy, np.ones(6), 'valid')))
             stop = stop - 4*hz + (step+3)*320
+        pos_sec = min(pos / hz, duration)
+        stop_sec = min(stop / hz, duration)
         stream = recognizer().create_stream()
         stream.accept_waveform(hz, np.pad(samples[pos:stop], (1600,3200)))
         recognizer().decode_stream(stream)
         res = stream.result
-        groups = [(symbols(word), min(stop/hz, max(pos/hz, (pos-1600)/hz+t)))
+        groups = [(symbols(word), min(stop_sec, max(pos_sec, (pos-1600)/hz+t)))
                   for word,t in zip(res.tokens,res.timestamps) if not word.startswith('<|') and symbols(word)]
         for i,(word,start) in enumerate(groups):
-            limit = groups[i+1][1] if i+1<len(groups) else stop/hz
+            limit = groups[i+1][1] if i+1<len(groups) else stop_sec
             end = min(limit, start + max(.20, .12*len(word)))
             if end > start:
                 observed.append([word,start,end])

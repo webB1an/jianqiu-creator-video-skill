@@ -22,10 +22,31 @@ SPOKEN_FIGURE = re.compile(
 
 
 def new_edit(kind):
-    if kind not in ('news', 'explainer'):
-        raise ValueError('Use news or explainer for a new narrated draft')
-    return {'size': [1920, 1080], 'fps': 30, 'narration_pace': 'quick', 'transition_handles': 'auto',
-            'story_intent': {'kind': kind, 'main_point': '', 'viewer_value': ''}, 'shots': []}
+    if kind not in ('news', 'explainer', 'story', 'teardown'):
+        raise ValueError('Use news, explainer, story or teardown for a new narrated draft')
+    pace = 'measured' if kind == 'story' else 'quick'
+    story_kind = 'news' if kind == 'news' else 'explainer'
+    hook_template = 'cold-open' if kind == 'story' else 'in-media-res'
+    return {
+        'size': [1920, 1080],
+        'fps': 30,
+        'narration_pace': pace,
+        'transition_handles': 'hold',
+        'caption_style': 'adaptive-kinetic',
+        'word_clock': True,
+        'voice_polish': 'broadcast',
+        'music_vocal_pocket': True,
+        'music_fade_out': 0.6,
+        'audio_intent': ['music', 'effects'],
+        'story_intent': {
+            'kind': story_kind,
+            'genre': kind,
+            'hook_template': hook_template,
+            'main_point': '',
+            'viewer_value': '',
+        },
+        'shots': [],
+    }
 
 
 def narration_pace(edit):
@@ -37,7 +58,23 @@ def narration_pace(edit):
     return pace
 
 
-def jianqiu_speed(edit, line, pace, profile_speed):
+def resolve_mood(line, shot=None):
+    mood = line.get('mood') or (shot.get('mood') if isinstance(shot, dict) else None) or 'neutral'
+    from story_craft import MOOD_PROFILES
+    if mood not in MOOD_PROFILES:
+        raise ValueError(f"Unknown voice mood {mood!r}; use {', '.join(MOOD_PROFILES)}")
+    return mood
+
+
+def mood_pause_seconds(line, shot=None):
+    if 'pause' in line:
+        return float(line['pause'])
+    from story_craft import MOOD_PROFILES
+    mood = resolve_mood(line, shot)
+    return round(max(0.04, 0.09 + MOOD_PROFILES[mood]['pause_delta']), 3)
+
+
+def jianqiu_speed(edit, line, pace, profile_speed, *, shot=None):
     """Resolve both generation paths. Old projects keep the historic directed-voice default."""
     if 'speed' in line:
         return float(line['speed'])
@@ -49,10 +86,16 @@ def jianqiu_speed(edit, line, pace, profile_speed):
         careful = line.get('pronunciation') or any(
             SPOKEN_FIGURE.search(RELATIVE_YEARS.sub(' ', words)) for words in (printed, spoken)
         )
-        return BRISK_SPEED if careful else QUICK_SPEED
-    if line.get('pronunciation') or pace == 'measured':
-        return profile_speed
-    return BRISK_SPEED
+        base = BRISK_SPEED if careful else QUICK_SPEED
+    elif line.get('pronunciation') or pace == 'measured':
+        base = profile_speed
+    else:
+        base = BRISK_SPEED
+    mood = resolve_mood(line, shot)
+    if mood == 'neutral':
+        return base
+    from story_craft import MOOD_PROFILES
+    return round(max(0.86, min(1.30, base * MOOD_PROFILES[mood]['speed_scale'])), 3)
 
 
 def directed_pace(line, edit, pace, speed):

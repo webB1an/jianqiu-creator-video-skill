@@ -7,12 +7,13 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-from PIL import Image, ImageChops, __version__ as pillow_version
+from PIL import Image, ImageChops, ImageFilter, __version__ as pillow_version
 
 import color_finish
 
 
-VERSION = 'motion-layers-3'
+VERSION = 'motion-layers-4'
+CURVES = ('ease', 'ease_out', 'ease_in', 'spring', 'linear', 'flow')
 
 
 def flow_tangents(frames, poses):
@@ -20,13 +21,13 @@ def flow_tangents(frames, poses):
     resting = (0.,) * len(poses[0])
     tangents = [resting]
     for i in range(1, len(frames) - 1):
-        left, right = frames[i] - frames[i-1], frames[i+1] - frames[i]
+        left, right = frames[i] - frames[i - 1], frames[i + 1] - frames[i]
         w1, w2 = 2 * right + left, right + 2 * left
         components = []
-        for a, b, c in zip(poses[i-1], poses[i], poses[i+1]):
-            before, after = (b-a) / left, (c-b) / right
+        for a, b, c in zip(poses[i - 1], poses[i], poses[i + 1]):
+            before, after = (b - a) / left, (c - b) / right
             if (before > 0 and after > 0) or (before < 0 and after < 0):
-                components.append((w1+w2) / (w1/before + w2/after))
+                components.append((w1 + w2) / (w1 / before + w2 / after))
             else:
                 components.append(0.)
         tangents.append(tuple(components))
@@ -35,18 +36,29 @@ def flow_tangents(frames, poses):
     return tuple(tangents)
 
 
+def _spring(t):
+    if t <= 0.0:
+        return 0.0
+    if t >= 1.0:
+        return 1.0
+    raw = 1.0 - math.exp(-6.2 * t) * (math.cos(7.6 * t) + 0.45 * math.sin(7.6 * t))
+    end = 1.0 - math.exp(-6.2) * (math.cos(7.6) + 0.45 * math.sin(7.6))
+    return raw / end
+
+
 @dataclass(frozen=True)
 class Layer:
     file: str
     width: float
     frames: tuple
-    poses: tuple  # pivot position x/y, scale, opacity, clockwise degrees, reveal fraction
+    poses: tuple  # pivot position x/y, scale, opacity, clockwise degrees, reveal fraction, blur px
     end: int | None
     curve: str = 'ease'
     tangents: tuple = ()
     pivot: tuple = (.5, .5)
     wipe: str = 'right'
     depth: float = 1.
+    shadow: tuple | None = None  # (dx, dy, blur, opacity)
 
     def pose(self, frame):
         if frame < self.frames[0] or (self.end is not None and frame >= self.end):
@@ -61,13 +73,27 @@ def sample_keys(frames, values, curve, tangents, frame):
         return first
     span = frames[index + 1] - frames[index]
     t = (frame - frames[index]) / span
-    progress = t if curve == 'linear' else t*t*(3-2*t)
-    base = tuple(a + (b-a)*progress for a, b in zip(first, values[index+1]))
+    if curve == 'linear':
+        progress = t
+    elif curve == 'ease_out':
+        progress = 1.0 - (1.0 - t) ** 3
+    elif curve == 'ease_in':
+        progress = t ** 3
+    elif curve == 'spring':
+        progress = _spring(t)
+    else:
+        progress = t * t * (3 - 2 * t)
+    base = tuple(a + (b - a) * progress for a, b in zip(first, values[index + 1]))
+    if curve == 'spring':
+        # Clamp bounded channels (scale > 0, opacity/reveal in [0,1], blur >= 0) during slight spring overshoot.
+        x, y, scale, opacity, rotation, reveal, blur = base
+        return (x, y, max(1e-3, scale), min(1.0, max(0.0, opacity)), rotation,
+                min(1.0, max(0.0, reveal)), max(0.0, blur))
     if curve != 'flow':
         return base
-    start_weight, end_weight = span*t*(1-t)**2, -span*t*t*(1-t)
-    return tuple(value + start_weight*m + end_weight*n
-                 for value, m, n in zip(base, tangents[index], tangents[index+1]))
+    start_weight, end_weight = span * t * (1 - t) ** 2, -span * t * t * (1 - t)
+    return tuple(value + start_weight * m + end_weight * n
+                 for value, m, n in zip(base, tangents[index], tangents[index + 1]))
 
 
 def finite(value):
@@ -144,9 +170,23 @@ def project_pose(pose, view, depth):
     x, y, scale, *rest = pose
     target_x, target_y, zoom = view
     magnification = zoom ** depth
-    return (.5 + (x-.5 - depth*(target_x-.5))*magnification,
-            .5 + (y-.5 - depth*(target_y-.5))*magnification,
-            scale*magnification, *rest)
+    return (.5 + (x - .5 - depth * (target_x - .5)) * magnification,
+            .5 + (y - .5 - depth * (target_y - .5)) * magnification,
+            scale * magnification, *rest)
+
+
+def _parse_shadow(raw, label):
+    if raw is None or raw is False:
+        return None
+    if raw is True:
+        return (0.0, 10.0, 16.0, 0.36)
+    if not isinstance(raw, dict) or set(raw) - {'dx', 'dy', 'blur', 'opacity'}:
+        raise ValueError(f'{label}: shadow must be boolean or {{dx, dy, blur, opacity}}')
+    dx, dy = raw.get('dx', 0.0), raw.get('dy', 10.0)
+    blur, opacity = raw.get('blur', 16.0), raw.get('opacity', 0.36)
+    if not all(finite(v) for v in (dx, dy, blur, opacity)) or not 0 <= blur <= 80 or not 0 <= opacity <= 1:
+        raise ValueError(f'{label}: shadow blur must be 0–80 and opacity 0–1')
+    return (float(dx), float(dy), float(blur), float(opacity))
 
 
 def parse(shot, frames):
@@ -166,8 +206,8 @@ def parse(shot, frames):
         if not finite(width) or width <= 0 or not isinstance(keys, list) or not keys:
             raise ValueError(f'{label}: provide a positive width and at least one key')
         curve = item.get('curve', 'ease')
-        if curve not in ('ease', 'linear', 'flow'):
-            raise ValueError(f'{label}: curve must be ease, linear or flow')
+        if curve not in CURVES:
+            raise ValueError(f"{label}: curve must be one of {', '.join(CURVES)}")
         depth = item.get('depth', 1.)
         if not finite(depth) or not 0 <= depth <= 1:
             raise ValueError(f'{label}: depth must be between 0 (screen) and 1 (target plane)')
@@ -177,6 +217,7 @@ def parse(shot, frames):
         wipe = item.get('wipe', 'right')
         if wipe not in ('right', 'left', 'down', 'up'):
             raise ValueError(f'{label}: set wipe to the edge movement direction: right, left, down or up')
+        shadow = _parse_shadow(item.get('shadow'), label)
         positions, poses = [], []
         for key in keys:
             if not isinstance(key, dict):
@@ -184,21 +225,24 @@ def parse(shot, frames):
             frame, at = key.get('frame'), key.get('at')
             scale, opacity = key.get('scale', 1), key.get('opacity', 1)
             if type(frame) is not int or not 0 <= frame < frames or (positions and frame <= positions[-1]):
-                raise ValueError(f'{label}: key frames must increase within 0..{frames-1}')
+                raise ValueError(f'{label}: key frames must increase within 0..{frames - 1}')
             if not isinstance(at, list) or len(at) != 2 or not all(finite(v) for v in at):
                 raise ValueError(f'{label}: at requires two finite center coordinates')
             if not finite(scale) or scale <= 0 or not finite(opacity) or not 0 <= opacity <= 1:
                 raise ValueError(f'{label}: scale must be positive and opacity between 0 and 1')
             rotation, reveal = key.get('rotation', 0), key.get('reveal', 1)
+            blur = key.get('blur', 0)
             if not finite(rotation) or not finite(reveal) or not 0 <= reveal <= 1:
                 raise ValueError(f'{label}: use finite rotation degrees and a reveal fraction between 0 and 1')
+            if not finite(blur) or not 0 <= blur <= 40:
+                raise ValueError(f'{label}: blur must be between 0 and 40 px')
             positions.append(frame)
-            poses.append((*at, scale, opacity, rotation, reveal))
+            poses.append((*at, scale, opacity, rotation, reveal, blur))
         end = item.get('end')
         if end is not None and (type(end) is not int or not positions[-1] < end <= frames):
             raise ValueError(f'{label}: end must follow the last key and be within this shot')
         tangents = flow_tangents(positions, poses) if curve == 'flow' else ()
-        layers.append(Layer(name, width, tuple(positions), tuple(poses), end, curve, tangents, tuple(pivot), wipe, depth))
+        layers.append(Layer(name, width, tuple(positions), tuple(poses), end, curve, tangents, tuple(pivot), wipe, depth, shadow))
     return layers
 
 
@@ -210,8 +254,6 @@ class Sprite:
 
     def samples(self, size):
         if size != self.sample_size:
-            # Low-pass before shrinking. Leave transparent texels beyond every edge
-            # so affine interpolation also works when opaque artwork touches its border.
             reduced = self.source.resize(size, Image.Resampling.LANCZOS) if size != self.source.size else self.source
             self.padded = Image.new('RGBa', (size[0] + 4, size[1] + 4))
             self.padded.paste(reduced, (2, 2))
@@ -226,23 +268,52 @@ def wipe_alpha(patch, inverse, sample_size, sample_scale, direction, fraction):
     horizontal = direction in ('right', 'left')
     axis = 0 if horizontal else 1
     a, b, offset = inverse[:3] if horizontal else inverse[3:]
-    # Axis-aligned wipes only need one row or column of coverage values.
     x = np.arange(patch.width if a else 1) + .5
     y = np.arange(patch.height if b else 1)[:, None] + .5
-    local = a*x + b*y + offset - 2  # remove the transparent sampling border
+    local = a * x + b * y + offset - 2
     length = sample_size[axis]
-    distance = (fraction*length - local if direction in ('right', 'down')
-                else local - (1-fraction)*length)
-    coverage = np.clip(.5 + distance/sample_scale[axis], 0., 1.)
-    mask = Image.fromarray(np.rint(255*coverage).astype('uint8'))
+    distance = (fraction * length - local if direction in ('right', 'down')
+                else local - (1 - fraction) * length)
+    coverage = np.clip(.5 + distance / sample_scale[axis], 0., 1.)
+    mask = Image.fromarray(np.rint(255 * coverage).astype('uint8'))
     if mask.size != patch.size:
         mask = mask.resize(patch.size, Image.Resampling.NEAREST)
     patch.putalpha(ImageChops.multiply(patch.getchannel('A'), mask))
 
 
-def stamp(canvas, sprite, width, pose, *, pivot=(.5, .5), wipe='right'):
+def _composite_shadow(canvas, patch, origin, shadow, opacity):
+    dx, dy, blur, shadow_opacity = shadow
+    scale = canvas.height / 1080.0
+    r = max(0.0, blur * scale)
+    pad = math.ceil(r * 2.5) + 2
+    ox, oy = origin
+    sx = round(ox + dx * scale) - pad
+    sy = round(oy + dy * scale) - pad
+    alpha = patch.getchannel('A')
+    padded = Image.new('L', (patch.width + pad * 2, patch.height + pad * 2), 0)
+    padded.paste(alpha, (pad, pad))
+    if r > 0:
+        padded = padded.filter(ImageFilter.GaussianBlur(radius=r))
+    factor = shadow_opacity * opacity
+    if factor != 1.0:
+        padded = padded.point(lambda v: round(v * factor))
+    # Crop shadow strictly inside canvas bounds before compositing.
+    w, h = canvas.size
+    x0, y0 = max(0, sx), max(0, sy)
+    x1, y1 = min(w, sx + padded.width), min(h, sy + padded.height)
+    if x1 <= x0 or y1 <= y0:
+        return
+    crop = padded.crop((x0 - sx, y0 - sy, x1 - sx, y1 - sy))
+    shade = Image.new('RGBA', crop.size, (10, 14, 12, 0))
+    shade.putalpha(crop)
+    canvas.alpha_composite(shade, (x0, y0))
+
+
+def stamp(canvas, sprite, width, pose, *, pivot=(.5, .5), wipe='right', shadow=None):
     cx, cy, scale, opacity = pose[:4]
-    rotation, reveal = pose[4:] if len(pose) > 4 else (0, 1)
+    rotation = pose[4] if len(pose) > 4 else 0
+    reveal = pose[5] if len(pose) > 5 else 1
+    blur = pose[6] if len(pose) > 6 else 0
     if opacity == 0 or reveal == 0:
         return
     w, h = canvas.size
@@ -253,27 +324,32 @@ def stamp(canvas, sprite, width, pose, *, pivot=(.5, .5), wipe='right'):
     sx, sy = sample_w / width_px, sample_h / height_px
     radians = math.radians(rotation % 360)
     cos, sin = round(math.cos(radians), 15), round(math.sin(radians), 15)
-    anchor_x, anchor_y = pivot[0]*width_px, pivot[1]*height_px
-    left = cx*w - cos*anchor_x + sin*anchor_y
-    top = cy*h - sin*anchor_x - cos*anchor_y
-    # Keep all four rotated corners and the interpolation footprint within the clip.
-    dx, dy = cos*width_px, sin*width_px
-    ex, ey = -sin*height_px, cos*height_px
-    pad_x, pad_y = abs(cos)*2/sx + abs(sin)*2/sy, abs(sin)*2/sx + abs(cos)*2/sy
+    anchor_x, anchor_y = pivot[0] * width_px, pivot[1] * height_px
+    left = cx * w - cos * anchor_x + sin * anchor_y
+    top = cy * h - sin * anchor_x - cos * anchor_y
+    dx, dy = cos * width_px, sin * width_px
+    ex, ey = -sin * height_px, cos * height_px
+    blur_pad = math.ceil(blur * 2.5) if blur > 0 else 0
+    pad_x = abs(cos) * 2 / sx + abs(sin) * 2 / sy + blur_pad
+    pad_y = abs(sin) * 2 / sx + abs(cos) * 2 / sy + blur_pad
     x0 = max(0, math.floor(left + min(0, dx) + min(0, ex) - pad_x))
     y0 = max(0, math.floor(top + min(0, dy) + min(0, ey) - pad_y))
     x1 = min(w, math.ceil(left + max(0, dx) + max(0, ex) + pad_x))
     y1 = min(h, math.ceil(top + max(0, dy) + max(0, ey) + pad_y))
     if x1 <= x0 or y1 <= y0:
         return
-    x, y = x0-left, y0-top
-    inverse = (cos*sx, sin*sx, 2 + (cos*x+sin*y)*sx,
-               -sin*sy, cos*sy, 2 + (-sin*x+cos*y)*sy)
+    x, y = x0 - left, y0 - top
+    inverse = (cos * sx, sin * sx, 2 + (cos * x + sin * y) * sx,
+               -sin * sy, cos * sy, 2 + (-sin * x + cos * y) * sy)
     patch = sprite.samples((sample_w, sample_h)).transform(
-        (x1-x0, y1-y0), Image.Transform.AFFINE, inverse, Image.Resampling.BICUBIC
+        (x1 - x0, y1 - y0), Image.Transform.AFFINE, inverse, Image.Resampling.BICUBIC
     ).convert('RGBA')
     if reveal < 1:
         wipe_alpha(patch, inverse, (sample_w, sample_h), (sx, sy), wipe, reveal)
+    if blur > 0:
+        patch = patch.filter(ImageFilter.GaussianBlur(radius=blur * (h / 1080.0)))
+    if shadow is not None:
+        _composite_shadow(canvas, patch, (x0, y0), shadow, opacity)
     if opacity != 1:
         patch.putalpha(patch.getchannel('A').point(lambda a: round(a * opacity)))
     canvas.alpha_composite(patch, (x0, y0))
@@ -297,7 +373,7 @@ def encode(layers, paths, base_args, base_filter, output_args, target, *, size, 
             with Image.open(path) as image:
                 if image.format != 'PNG' or image.n_frames != 1 or not ('A' in image.getbands() or 'transparency' in image.info):
                     raise ValueError(f'Motion layer requires a single PNG with alpha: {layer.file}')
-            corrected, _ = color_finish.icc_still(path, Path(tmp)/f'{index}.png')
+            corrected, _ = color_finish.icc_still(path, Path(tmp) / f'{index}.png')
             with Image.open(corrected) as image:
                 sprites[layer.file] = Sprite(image.convert('RGBA'))
         with tempfile.TemporaryFile() as log, subprocess.Popen(list(map(str, command)), stdin=subprocess.PIPE, stderr=log) as encoder:
@@ -312,12 +388,11 @@ def encode(layers, paths, base_args, base_filter, output_args, target, *, size, 
                             for layer, pose in zip(layers, poses):
                                 if pose is not None:
                                     stamp(canvas, sprites[layer.file], layer.width, pose,
-                                          pivot=layer.pivot, wipe=layer.wipe)
+                                          pivot=layer.pivot, wipe=layer.wipe, shadow=layer.shadow)
                             pixels = canvas.tobytes()
                             last_poses = poses
                         stream.write(pixels)
             except BrokenPipeError:
-                # A short source may also close the graph early; export checks the actual frame count.
                 pass
             if encoder.wait():
                 log.seek(0)

@@ -43,8 +43,9 @@ def stamp(sample):
 def prepare(edit, pins, staging, *, guide_only=False):
     import numpy as np
     from captioning import MIN_CUE_SECONDS
-    from jianqiu_voice import JianqiuVoice, VOICE_ID
-    from narration_pace import directed_pace, jianqiu_speed, narration_pace
+    from jianqiu_voice import JianqiuVoice, VOICE_ID, apply_mood_polish
+    from prosody_markup import PROSODY_VERSION, parse_prosody_markup
+    from narration_pace import directed_pace, jianqiu_speed, mood_pause_seconds, narration_pace, resolve_mood
     from speech_clock import timed_captions
     from voice_endings import EndingChecker, checked_take
 
@@ -97,7 +98,21 @@ def prepare(edit, pins, staging, *, guide_only=False):
         start=cursor
         pause(shot.get('lead',0.08))
         for index,line in enumerate(shot['lines']):
-            words=line.get('spoken',line['text'])
+            raw_text = line.get('text', '')
+            raw_spoken = line.get('spoken', raw_text)
+            parsed_text = parse_prosody_markup(raw_text)
+            parsed_spoken = parse_prosody_markup(raw_spoken)
+            if parsed_text['has_markup'] or parsed_spoken['has_markup']:
+                clean_disp = parsed_text['clean_text']
+                merged_hi = list(dict.fromkeys([*(line.get('highlights') or []), *parsed_text['highlights'], *parsed_spoken['highlights']]))
+                line = dict(line, text=clean_disp)
+                if 'spoken' in line:
+                    line['spoken'] = parsed_spoken['clean_text']
+                if merged_hi:
+                    line['highlights'] = merged_hi
+            words_tts = raw_spoken
+            words = parsed_spoken['clean_text'] or raw_spoken
+            mood=resolve_mood(line, shot)
             if 'source_audio' in line:
                 if 'audio' in line:raise ValueError('Choose one source for this line of original sound')
                 from presenter_source import source_bite
@@ -108,10 +123,12 @@ def prepare(edit, pins, staging, *, guide_only=False):
                 if line.get('voice',edit.get('voice',VOICE_ID)) != VOICE_ID:
                     raise ValueError('Explicit ZipVoice phonemes require the Jianqiu voice.')
                 directed_voice=directed_voice or DirectedVoice(edit,Path('audio/pronunciation'))
-                speed=jianqiu_speed(edit,line,pace,directed_voice.voice.profile['speed'])
-                path,record=directed_voice.get(directed_pace(line,edit,pace,speed),speed,ending_checker,write_generated)
+                speed=jianqiu_speed(edit,line,pace,directed_voice.voice.profile['speed'],shot=shot)
+                path,record=directed_voice.get(directed_pace(line,edit,pace,speed),speed,ending_checker,write_generated,mood=mood,marked_words=raw_spoken)
                 take={'voice':VOICE_ID,'speed':record['effective_speed'],'pronunciation':record,
-                      'reference_sha256':directed_voice.voice.profile['prompt_sha256']}
+                      'reference_sha256':directed_voice.voice.reference_sha256(mood)}
+                if mood != 'neutral':
+                    take['mood']=mood
             elif 'audio' in line:
                 path=Path(line['audio'])
                 take={'voice':'recording'}
@@ -119,21 +136,33 @@ def prepare(edit, pins, staging, *, guide_only=False):
                 selected=line.get('voice',edit.get('voice',VOICE_ID))
                 if selected==VOICE_ID:
                     jianqiu=jianqiu or JianqiuVoice()
-                    signature=jianqiu.signature
-                    default_speed=jianqiu_speed(edit,line,pace,jianqiu.profile['speed'])
+                    signature=jianqiu.mood_signature(mood)
+                    if parsed_spoken['has_markup']:
+                        signature=[*signature, PROSODY_VERSION]
+                    default_speed=jianqiu_speed(edit,line,pace,jianqiu.profile['speed'],shot=shot)
                 elif selected=='melo':
                     signature=['melo-int8-v1']
                     default_speed=1.18
                 else:
                     raise ValueError(f'Unknown voice {selected!r}; use {VOICE_ID}, melo or line.audio')
                 speed=float(line.get('speed',edit.get('speed',default_speed)))
-                key=hashlib.sha256(json.dumps([*signature,speed,words],ensure_ascii=False).encode()).hexdigest()[:24]
+                key=hashlib.sha256(json.dumps([*signature,speed,words_tts],ensure_ascii=False).encode()).hexdigest()[:24]
                 path=folder/(key+'.wav')
                 take={'voice':selected,'speed':speed}
+                if mood != 'neutral':
+                    take['mood']=mood
                 if selected==VOICE_ID:
-                    take['reference_sha256']=jianqiu.profile['prompt_sha256']
-                    path,take['ending_check']=checked_take(path, words, speed, jianqiu, ending_checker,
-                                                          write_generated, prior_checks.get(path.name))
+                    take['reference_sha256']=jianqiu.reference_sha256(mood)
+                    def _write_with_mood(target_p, voice_obj, _m=mood):
+                        write_generated(target_p, voice_obj)
+                        if _m != 'neutral':
+                            apply_mood_polish(target_p, _m)
+                    class _MoodAdapter:
+                        def __init__(self, v, m, raw_w): self._v, self._m, self._raw_w = v, m, raw_w
+                        def generate(self, w, sp, *, preserve_pauses=False):
+                            return self._v.generate(self._raw_w, sp, preserve_pauses=preserve_pauses, mood=self._m)
+                    path,take['ending_check']=checked_take(path, words, speed, _MoodAdapter(jianqiu, mood, words_tts), ending_checker,
+                                                          _write_with_mood, prior_checks.get(path.name))
                 elif not path.exists():
                     melo=melo or load_melo()
                     voice=melo.generate(words,sid=0,speed=speed)
@@ -159,7 +188,16 @@ def prepare(edit, pins, staging, *, guide_only=False):
             beat=None
             cue_clock = shot.get('remotion_effect', {}).get('cues')
             line_id = line.get('id', f"{shot['id']}.L{index + 1}")
+            cap_style = edit.get('caption_style', 'plate')
+            adaptive_hit = (
+                cap_style == 'adaptive-kinetic'
+                and (start < round(6.0 * RATE) or shot.get('hook') or shot.get('emphasis') or shot.get('rehook')
+                     or line.get('emphasis') or line.get('highlights')
+                     or shot.get('remotion_effect', {}).get('effect') in ('kinetic-hook', 'quote-card'))
+            )
             caption_clock = (edit.get('word_clock') or 'word_times' in line or cue_clock
+                             or cap_style == 'kinetic-word' or shot.get('caption_style') == 'kinetic-word'
+                             or adaptive_hit
                              or (shot.get('explainer_scene') and line.get('id')))
             if caption_clock or line_id in wanted_lines:
                 from speech_clock import take_beat
@@ -176,7 +214,7 @@ def prepare(edit, pins, staging, *, guide_only=False):
             for start_sample,end_sample,unit in zip(cuts,cuts[1:],units):
                 captions.append(f"{len(captions)+1}\n{stamp(cursor+start_sample)} --> {stamp(cursor+end_sample)}\n{unit}\n")
             pieces.append(arr);cursor=end
-            pause(line.get('pause',0.09))
+            pause(mood_pause_seconds(line, shot))
         pause(shot.get('tail',0.18))
         if cursor<=start: raise ValueError('Empty shot')
         quantum=RATE//fps
@@ -186,10 +224,75 @@ def prepare(edit, pins, staging, *, guide_only=False):
     return finish_prepare(staging,pins,fps,pieces,cursor,shots,captions,voice_takes,beats,edit=picture)
 
 
+def _picture_cut_offset(shot):
+    choices = [key for key in ('j_cut', 'l_cut', 'cut_offset') if shot.get(key) is not None]
+    if not choices:
+        return 0.0
+    if len(choices) != 1:
+        raise ValueError(f"{shot['id']}: specify only one of j_cut, l_cut or cut_offset")
+    key = choices[0]
+    minimum = -2.5 if key == 'cut_offset' else 0.0
+    message = f"{shot['id']}: {key} must be a number within {minimum:g}..2.5 seconds"
+    try:
+        value = float(shot[key])
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(message) from exc
+    if isinstance(shot[key], bool) or not minimum <= value <= 2.5:
+        raise ValueError(message)
+    return -value if key == 'l_cut' else value
+
+
+def _apply_jl_cuts(edit_shots, timeline_shots, fps, *, adopted_picture=False):
+    """Apply optional J-cut / L-cut picture boundary shifts while keeping narration & subtitles sample-locked.
+
+    - `j_cut` (seconds > 0): audio of shot[i] enters BEFORE the picture cuts (picture cuts +N frames LATER).
+    - `l_cut` (seconds > 0): picture of shot[i] enters BEFORE shot[i-1]'s audio ends (picture cuts -N frames EARLIER).
+    - `cut_offset` (signed seconds): + = J-cut (later picture cut), - = L-cut (earlier picture cut).
+    Total timeline frames remain strictly invariant.
+    """
+    offsets = {shot['id']: _picture_cut_offset(shot) for shot in edit_shots}
+    if not any(offsets.values()):
+        return timeline_shots
+    if adopted_picture:
+        raise ValueError('Apply J/L cuts in the source assembly before adopting picture_edit, or remove its explicit picture cut before setting J/L offsets.')
+    if offsets.get(timeline_shots[0]['id']):
+        raise ValueError(f"{timeline_shots[0]['id']}: the opening shot has no incoming cut to shift")
+
+    total = sum(s['frames'] for s in timeline_shots)
+    orig_bounds = [s['start_frame'] for s in timeline_shots] + [total]
+    new_bounds = list(orig_bounds)
+    min_shot_frames = max(6, round(0.25 * fps))
+    shifts = [0] * len(timeline_shots)
+
+    for i in range(1, len(timeline_shots)):
+        delta = round(offsets.get(timeline_shots[i]['id'], 0) * fps)
+        if delta == 0:
+            continue
+        # Allow a pre-existing short insert to keep its original length.
+        lo = new_bounds[i - 1] + min(min_shot_frames, timeline_shots[i - 1]['frames'])
+        hi = orig_bounds[i + 1] - min(min_shot_frames, timeline_shots[i]['frames'])
+        target = max(lo, min(hi, orig_bounds[i] + delta))
+        new_bounds[i] = target
+        shifts[i] = target - orig_bounds[i]
+
+    adjusted = []
+    for i, ts in enumerate(timeline_shots):
+        row = dict(ts, audio_start_frame=ts['start_frame'], audio_frames=ts['frames'],
+                   start_frame=new_bounds[i], frames=new_bounds[i + 1] - new_bounds[i])
+        if shifts[i]:
+            row['cut_style'] = 'j-cut' if shifts[i] > 0 else 'l-cut'
+            row['cut_shift_frames'] = shifts[i]
+        adjusted.append(row)
+    return adjusted
+
+
 def finish_prepare(staging,pins,fps,pieces,cursor,shots,captions,voice_takes,beats,presenter_source=None,*,edit=None):
     from production_run import digest
     if not shots or len(set(s['id'] for s in shots))!=len(shots): raise ValueError('Use unique shot IDs')
     if len({b['id'] for b in beats})!=len(beats): raise ValueError('Use unique spoken line ids across the edit')
+    if edit:
+        shots = _apply_jl_cuts(edit.get('shots', []), shots, fps,
+                              adopted_picture=bool(edit.get('picture_edit')))
     (staging/'audio').mkdir(parents=True)
     with wave.open(str(staging/'audio/narration.wav'),'wb') as writer:
         writer.setparams((1,2,RATE,0,'NONE','not compressed'))
@@ -206,9 +309,14 @@ def finish_prepare(staging,pins,fps,pieces,cursor,shots,captions,voice_takes,bea
         timeline['shots'] = align_picture(edit, timeline['frames'], fps)
     from pronunciation_review import summary as pronunciation_summary
     timeline['pronunciation_review'] = pronunciation_summary(voice_takes)
+    for row in timeline['pronunciation_review']:
+        for risk in row.get('lexicon_risks', []):
+            print(f"多音字复核 · {row['shot']} · {risk['term']} · {risk['detail']}", file=sys.stderr)
     if beats:timeline['beats']=beats
     if presenter_source:timeline['presenter_source']=presenter_source
     if edit:
+        from narrative_audit import measure_visual_diversity
+        timeline['visual_diversity'] = measure_visual_diversity(timeline, edit)
         from section_pace import evidence_readings
         readings = evidence_readings(edit, timeline)
         if readings:
@@ -224,6 +332,7 @@ def finish_prepare(staging,pins,fps,pieces,cursor,shots,captions,voice_takes,bea
 
 def read_script(edit, line_ids):
     """Print the author's actual spoken lines, leaving editorial metadata off the blind copy."""
+    from prosody_markup import parse_prosody_markup
     printed = False
     missing = []
     presenter = edit.get('presenter')
@@ -235,6 +344,10 @@ def read_script(edit, line_ids):
             continue
         for index, line in enumerate(shot['lines'], start=1):
             words = line.get('spoken', line.get('text'))
+            if isinstance(words, str):
+                parsed = parse_prosody_markup(words)
+                if parsed['has_markup']:
+                    words = parsed['clean_text']
             label = f"{shot_id} / {line['id']}" if 'id' in line else f"{shot_id}.L{index}"
             if not isinstance(words, str) or not words.strip():
                 recorded = recorded_programme or 'source_audio' in line or 'audio' in line
@@ -263,8 +376,12 @@ def main():
     mode = cli.add_mutually_exclusive_group()
     mode.add_argument('--read-script', action='store_true',
                       help='Print only the scripted spoken words from edit.json, without audio preparation')
-    mode.add_argument('--new-edit', choices=('news', 'explainer'),
-                      help='Create a new edit.json with the current spoken pace, without generating media')
+    mode.add_argument('--new-edit', choices=('news', 'explainer', 'story', 'teardown'),
+                      help='Create a new edit.json with upgraded editorial defaults, without generating media')
+    mode.add_argument('--audit', action='store_true',
+                      help='Run pre-render narrative, pacing, hook and breath audit on edit.json + timeline.json')
+    mode.add_argument('--preflight', action='store_true',
+                      help='Run unified studio preflight (story_craft, pronunciation, auto_focus, color_match, packaging, narrative_audit)')
     mode.add_argument('--adopt-roughcut', type=Path, metavar='RECEIPT',
                       help='Apply the chosen source assembly to edit.json on the prepared narration clock')
     cli.add_argument('--plan', type=Path, help='Source plan used to render the rough-cut receipt')
@@ -290,7 +407,7 @@ def main():
     if args.plan or args.version:
         cli.error('--plan and --version require --adopt-roughcut')
     if args.guide_dir:
-        if args.new_edit or args.read_script:
+        if args.new_edit or args.read_script or args.audit or args.preflight:
             cli.error('--guide-dir is used alone or with --adopt-roughcut')
         from production_run import InputSnapshot, stage_run
         from tempfile import TemporaryDirectory
@@ -315,6 +432,26 @@ def main():
         except OSError as exc:
             cli.exit(1, f'无法新建 edit.json：{exc}\n')
         return 0
+    if args.preflight:
+        from studio_pipeline import preflight as run_preflight
+        try:
+            print(json.dumps(run_preflight(Path.cwd()), ensure_ascii=False, indent=2))
+            return 0
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            cli.exit(1, f'无法执行制片预检：{exc}\n')
+    if args.audit:
+        from narrative_audit import audit as audit_narrative
+        try:
+            edit = json.loads(Path('edit.json').read_text(encoding='utf-8'))
+            timeline = json.loads(Path('timeline.json').read_text(encoding='utf-8'))
+            beats_path = Path('qa/beat-grid.json')
+            bg = json.loads(beats_path.read_text(encoding='utf-8')) if beats_path.is_file() else None
+            cov = json.loads(Path('cover.json').read_text(encoding='utf-8')) if Path('cover.json').is_file() else None
+            pkg = json.loads(Path('packaging.json').read_text(encoding='utf-8')) if Path('packaging.json').is_file() else None
+            print(json.dumps(audit_narrative(timeline, edit, beat_grid=bg, cover_cfg=cov, packaging_cfg=pkg), ensure_ascii=False, indent=2))
+            return 0
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            cli.exit(1, f'无法执行叙事与节奏预检：{exc}\n')
     if args.read_script:
         try:
             edit = json.loads(Path('edit.json').read_text(encoding='utf-8'))

@@ -26,22 +26,28 @@ def translucent(color):
     return not re.fullmatch(r'[a-z]+|(?:rgb|hsl)\([^)]*\)', color)
 
 
-def overlap_window(params, frames, fps):
-    count = params.get('overlap', min(frames, max(2, floor(fps * .5 + .5))))
+def overlap_window(params, frames, fps, effect=None):
+    frac = .34 if effect == 'whip-pan' else (.45 if effect == 'blur-dissolve' else (.40 if effect == 'match-cut-ring' else .5))
+    count = params.get('overlap', min(frames, max(2, floor(fps * frac + .5))))
     at = params.get('atFrame', (frames - count) // 2)
     if not 0 <= at < at + count <= frames:
         raise ValueError('Transition overlap must be inside the shot')
     return at, count
 
 
-def background_window(effect, params, frames, fps):
+def background_window(effect, params, frames, fps, has_background=False):
     if effect in ('flip', 'cube'):
         at, count = overlap_window(params, frames, fps)
         return at + 1, at + count
     if effect == 'lower-third':
         visible = translucent(params.get('background', 'transparent'))
-    elif effect in ('grid-pulse', 'logo-stroke-draw', 'credits-roll'):
-        visible = params.get('transparent') or translucent(params.get('background', '#131a17'))
+    elif effect in ('grid-pulse', 'logo-stroke-draw', 'credits-roll',
+                    'kinetic-hook', 'callout-annotation', 'sticker-callout',
+                    'spatial-3d-card', 'exploded-diagram', 'infinite-canvas',
+                    'chapter-title', 'quote-card', 'end-card', 'text-highlight',
+                    'stat-counter', 'bar-chart', 'line-chart', 'donut-chart',
+                    'progress-steps', 'metric-grid', 'comparison-table', 'timeline-strip'):
+        visible = bool(has_background) or bool(params.get('transparent')) or translucent(params.get('background', '#131a17'))
     elif effect == 'gradient-shift':
         visible = any(translucent(color) for key in ('from', 'to') for color in params.get(key, []))
     elif effect == 'letterbox-reveal':
@@ -64,12 +70,12 @@ def media_usage(spec, entry, key, file):
     frames, fps, p = spec['frames'], spec['fps'], spec['params']
     effect = entry['id']
     start, end, sequence_start = 0, frames, 0
-    offset = p.get(OFFSET_KEYS.get(key, f'{key}Start'), 0) if key is not None else 0
+    offset = p.get(OFFSET_KEYS.get(key, f'{key}Start'), 0) if key is not None else spec.get('backgroundStart', 0)
     if type(offset) is not int or offset < 0:
         raise ValueError(f'{key} requires a nonnegative integer source offset')
 
     if key is None:
-        start, end = background_window(effect, p, frames, fps)
+        start, end = background_window(effect, p, frames, fps, has_background=bool(spec.get('background')))
     elif effect == 'photo-stack' and key == 'second':
         start = sequence_start = p.get('secondAt', floor((frames - 1) * .48 + .5))
         if type(start) is not int or not 0 <= start < frames:
@@ -92,7 +98,7 @@ def media_usage(spec, entry, key, file):
                         end = frame
                         break
         else:
-            at, overlap = overlap_window(p, frames, fps)
+            at, overlap = overlap_window(p, frames, fps, effect)
             if key == 'outgoing':
                 end = at + overlap
             else:

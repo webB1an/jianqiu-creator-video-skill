@@ -1,0 +1,19 @@
+{
+  "key": "click-rim-cc0",
+  "tag": "click",
+  "title": "Snare cross-stick click",
+  "author": "Virtuosity Drums contributors",
+  "page": "https://github.com/sfzinstruments/virtuosity_drums/blob/9f04cf9a734527edfbb0a4eee1f674e45bbf71bc/Samples/mid/snare/mid_snare_crossstick_vl3.flac",
+  "license": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "kind": "48kHz mono PCM prepared from verified CC0 1.0 acoustic instrument recording",
+  "stars": null,
+  "votes": null,
+  "duration": 0.18,
+  "anchor": 0.013104166666666667,
+  "source_sha256": "3b89eb2bb8e0813fcf6d9aba5bdd472db044d8afe2d790f7508c4a477b2e7549",
+  "wav_sha256": "72622a06960a45c7957091d483bb76abef4a80effbc043ae723f0bcbfe070d96",
+  "instrument": "snare cross-stick",
+  "license_page": "https://github.com/sfzinstruments/virtuosity_drums/blob/9f04cf9a734527edfbb0a4eee1f674e45bbf71bc/LICENSE",
+  "source": "https://raw.githubusercontent.com/sfzinstruments/virtuosity_drums/9f04cf9a734527edfbb0a4eee1f674e45bbf71bc/Samples/mid/snare/mid_snare_crossstick_vl3.flac",
+  "preparation": "highpass=f=100; mono 48 kHz PCM; trim to 0.18s, scale peak to 0.82 and fade edges"
+}

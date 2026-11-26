@@ -147,9 +147,7 @@ def engine_files(entry, *, placement=False):
     return files
 
 
-def check_source_duration(path, usage, fps):
-    if not usage or path.suffix.lower() not in MOVING:
-        return
+def probe_video_duration(path):
     info = json.loads(
         subprocess.check_output(
             [
@@ -170,9 +168,20 @@ def check_source_duration(path, usage, fps):
         raise ValueError(f"No video track in {path.name}")
     stream = info["streams"][0]
     if "duration_ts" in stream:
-        duration = int(stream["duration_ts"]) * Fraction(stream["time_base"])
-    else:
-        duration = Fraction(info["format"]["duration"])
+        return int(stream["duration_ts"]) * Fraction(stream["time_base"])
+    return Fraction(info["format"]["duration"])
+
+
+def check_source_duration(path, usage, fps, *, allow_loop=False):
+    if not usage or path.suffix.lower() not in MOVING:
+        return
+    duration = probe_video_duration(path)
+    if allow_loop:
+        start_s = usage["range"][0]
+        if Fraction(start_s) >= duration:
+            raise ValueError(f"{path.name} ends before requested backgroundStart {start_s}s")
+        usage["range"][1] = min(usage["range"][1], float(duration))
+        return
     last_frame = round(usage["range"][1] * fps) - 1
     if Fraction(last_frame, fps) >= duration:
         raise ValueError(f"{path.name} ends before requested source frame {last_frame}")
@@ -185,6 +194,32 @@ def project_lock(project):
     with (work / "project.lock").open("a") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         yield
+
+
+def _measure_media_luma(path, *, start_s=0.0):
+    """Sample median Rec.709 normalized luminance (0..1) of background media for adaptive scrim."""
+    try:
+        if path.suffix.lower() in MOVING:
+            raw = subprocess.check_output([
+                "ffmpeg", "-nostdin", "-v", "error", "-ss", f"{max(0.0, float(start_s)):.3f}",
+                "-i", str(path), "-frames:v", "1", "-vf", "scale=160:90,format=rgb24",
+                "-f", "rawvideo", "-",
+            ])
+            if len(raw) >= 160 * 90 * 3:
+                import numpy as np
+                arr = np.frombuffer(raw[:160 * 90 * 3], np.uint8).reshape(90, 160, 3).astype(np.float32)
+                luma = (0.2126 * arr[:, :, 0] + 0.7152 * arr[:, :, 1] + 0.0722 * arr[:, :, 2]) / 255.0
+                return round(float(np.median(luma)), 3)
+        else:
+            from PIL import Image
+            import numpy as np
+            with Image.open(path) as im:
+                arr = np.asarray(im.convert("RGB").resize((160, 90)), dtype=np.float32)
+                luma = (0.2126 * arr[:, :, 0] + 0.7152 * arr[:, :, 1] + 0.0722 * arr[:, :, 2]) / 255.0
+                return round(float(np.median(luma)), 3)
+    except Exception:
+        return None
+    return None
 
 
 def stage(spec, base, target, entry, *, film=False):
@@ -236,21 +271,53 @@ def stage(spec, base, target, entry, *, film=False):
             inputs[os.path.relpath(path, base)] = checksum
         return name, path, bundled
 
-    def stage_layer(value, key):
+    def stage_layer(value, key, *, allow_loop=False):
         name, path, bundled = copy_media(value, key or "backplate")
         relative = os.path.relpath(path, base)
         usage = media_usage(spec, entry, key, relative)
-        check_source_duration(public / name, usage, spec["fps"])
+        check_source_duration(public / name, usage, spec["fps"], allow_loop=allow_loop)
         if usage and not bundled:
             used.append(usage)
-        return name
+        return name, public / name
 
     for key in media_keys:
         if params.get(key):
-            params[key] = stage_layer(params[key], key)
+            can_loop = (entry["id"] == "broll-evidence-pop" and key == "source" and params.get("sourceLoop", True))
+            params[key], staged_file = stage_layer(params[key], key, allow_loop=bool(can_loop))
+            if can_loop and staged_file.suffix.lower() in MOVING:
+                dur_s = probe_video_duration(staged_file)
+                src_start = int(params.get("sourceStart", 0) or 0)
+                params["sourceDurationFrames"] = max(2, int(math.floor(float(dur_s) * spec["fps"])) - src_start - 1)
+    if entry["id"] == "broll-evidence-pop" and isinstance(params.get("popups"), list):
+        staged_popups = []
+        for idx, pop in enumerate(params["popups"]):
+            item = dict(pop)
+            if item.get("source"):
+                item["source"], _ = stage_layer(item["source"], f"popup_{idx}", allow_loop=True)
+            staged_popups.append(item)
+        params["popups"] = staged_popups
+    if entry["id"] == "infinite-canvas" and isinstance(params.get("nodes"), list):
+        staged_nodes = []
+        for idx, node in enumerate(params["nodes"]):
+            item = dict(node)
+            if item.get("image"):
+                item["image"], _ = stage_layer(item["image"], f"node_{idx}", allow_loop=True)
+            staged_nodes.append(item)
+        params["nodes"] = staged_nodes
     background = spec.get("background")
+    bg_loop = spec.get("backgroundLoop", True)
+    bg_start = spec.get("backgroundStart", 0)
+    bg_duration_frames = None
+    bg_luma = None
     if background:
-        background = stage_layer(background, None)
+        if not isinstance(bg_start, int) or bg_start < 0:
+            raise ValueError("backgroundStart must be a nonnegative integer frame offset")
+        background, bg_file = stage_layer(background, None, allow_loop=bool(bg_loop))
+        if bg_file.suffix.lower() in MOVING:
+            dur_s = probe_video_duration(bg_file)
+            usable_frames = max(2, int(math.floor(float(dur_s) * spec["fps"])) - bg_start - 1)
+            bg_duration_frames = usable_frames
+        bg_luma = _measure_media_luma(bg_file, start_s=bg_start / max(1, spec["fps"]))
     clean = dict(
         width=spec["width"],
         height=spec["height"],
@@ -258,7 +325,15 @@ def stage(spec, base, target, entry, *, film=False):
         frames=spec["frames"],
         params=params,
         background=background,
+        backgroundStart=bg_start,
+        backgroundLoop=bool(bg_loop),
+        backgroundDurationFrames=bg_duration_frames,
     )
+    if bg_luma is not None:
+        clean["backgroundLuma"] = bg_luma
+    for opt in ("backgroundScrim", "backgroundBlur", "backgroundMotion"):
+        if opt in spec:
+            clean[opt] = spec[opt]
     (target / "spec.json").write_text(json.dumps(clean, ensure_ascii=False))
     (target / "index.jsx").write_text(
         'import {registerRoot} from "remotion";\nimport {makeComposition} from "./assets/remotion-library/composition";\n'
@@ -282,7 +357,9 @@ def stage_editable(spec, base, target, entry):
 
 def browser():
     env = os.environ.get("CREATOR_CHROME")
-    return env or next(
+    if env:
+        return env
+    found = next(
         (
             str(p)
             for p in (Path.home() / ".cache/hyperframes/chrome").glob("**/chrome-headless-shell")
@@ -290,6 +367,10 @@ def browser():
         ),
         None,
     )
+    if found:
+        return found
+    mac_chrome = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+    return str(mac_chrome) if mac_chrome.is_file() else None
 
 
 def render(args, entries):
@@ -371,7 +452,19 @@ def render(args, entries):
         exe = browser()
         if exe:
             call += ["--browser-executable=" + exe]
-        subprocess.run(call, cwd=RUNTIME, check=True)
+        # Retry once on transient headless Chrome Target.createTarget / Target closed startup glitches.
+        for attempt in range(2):
+            proc = subprocess.run(call, cwd=RUNTIME, capture_output=True, text=True)
+            if proc.returncode == 0:
+                break
+            err_text = (proc.stderr or "") + (proc.stdout or "")
+            if attempt == 0 and ("Target closed" in err_text or "ProtocolError" in err_text):
+                import time
+                time.sleep(1.0)
+                continue
+            if proc.stderr:
+                sys.stderr.write(proc.stderr)
+            raise subprocess.CalledProcessError(proc.returncode, call, output=proc.stdout, stderr=proc.stderr)
         if project_mode and args.frame is None:
             inputs.update(bindings)
             for folder, table in ((base, inputs), (SKILL, engine)):

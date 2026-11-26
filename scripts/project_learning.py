@@ -101,7 +101,21 @@ def find(root, project, terms, shot=None):
             asset['source_notes'] = notes_on_source
         if item['editorial'].get('applications'):
             asset['applications'] = library.research_applications(item, items)
+    retention_lessons = []
+    ret_dir = root / 'retention-lessons'
+    if ret_dir.is_dir():
+        for rp in sorted(ret_dir.glob('*.json'))[-5:]:
+            try:
+                rdata = read(rp)
+                retention_lessons.append(dict(
+                    project=rdata.get('project'), platform=rdata.get('platform'),
+                    lessons=rdata.get('pattern_lessons', []),
+                ))
+            except (OSError, ValueError):
+                continue
     result = dict(terms=terms, assets=assets, lessons=notes, previous_outcomes=tested)
+    if retention_lessons:
+        result['retention_lessons'] = retention_lessons
     path = project / LOG
     with library.exclusive(path.parent):
         data = frozen_learning(project) or dict(schema=1, searches={}, decisions={})

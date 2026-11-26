@@ -115,9 +115,39 @@ def inspect_rhythm(master, timeline, bridges, subs, *, components=(), windows=()
             if process.poll() is None:
                 process.terminate()
 
+    total_s = frame_count / fps
+    overall_quiet_s = round(sum(r['quiet_seconds'] for r in result), 3)
+    overall_quiet_frac = round(overall_quiet_s / max(0.01, total_s), 4)
+    ppt_risk_shots = []
+    worst_freeze = 0.0
+    worst_shot = None
+    for r in result:
+        dur_s = max(0.01, (r['end_frame'] - r['start_frame']) / fps)
+        q_frac = round(r['quiet_seconds'] / dur_s, 3)
+        max_q = max((sp['seconds'] for sp in r['longest_quiet_spans']), default=0.0)
+        if max_q > worst_freeze:
+            worst_freeze = max_q
+            worst_shot = r['shot']
+        if q_frac > 0.50 or max_q > 4.5:
+            ppt_risk_shots.append(dict(
+                shot=r['shot'], duration_seconds=round(dur_s, 2),
+                quiet_seconds=r['quiet_seconds'], quiet_fraction=q_frac,
+                max_continuous_freeze_seconds=round(max_q, 2),
+            ))
+    motion_summary = dict(
+        programme_seconds=round(total_s, 2),
+        overall_quiet_seconds=overall_quiet_s,
+        overall_quiet_fraction=overall_quiet_frac,
+        max_continuous_freeze_seconds=round(worst_freeze, 2),
+        worst_shot=worst_shot,
+        ppt_risk_shot_count=len(ppt_risk_shots),
+        ppt_risk_shots=ppt_risk_shots,
+    )
+
     return dict(method='luma_change', spoken_hold_version=2, proxy_size=[WIDTH, HEIGHT],
-                proxy_rows=[BODY.start, BODY.stop], pixel_delta=MIN_PIXEL_DELTA,
+                fps=fps, proxy_rows=[BODY.start, BODY.stop], pixel_delta=MIN_PIXEL_DELTA,
                 minimum_changed_fraction=MIN_AREA_FRACTION, minimum_quiet_seconds=minimum/fps,
+                motion_summary=motion_summary,
                 shots=result, seams=seams, flat_picture_candidates=flat_spans,
                 flat_picture_max_rgb_std_below=FLAT_RGB_STD,
                 hold_candidates=select_picture_holds(result, fps, subs, takes=timeline.get('voice_takes'),

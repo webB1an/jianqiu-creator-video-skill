@@ -65,4 +65,4 @@
 {"patterns":{"pulse":{"beats":4,"notes":[["kick",0,-17,0,0],["pluck",0.75,-20,-2,0.12],["rim",2,-22,0,-0.15]]}},"sections":[{"start":"search","until":"answer","bpm":112,"pattern":"pulse","fade_out":0.10}]}
 ```
 
-每个音符依次为乐器、拍内位置、峰值衰减 dB、移调半音、声像（−1 到 1）。区域起点与终点绑定 shot id，offset 和 end_offset 是秒。无 until 时延续到片尾。未编配的区间保持静音；选取与本片动作、题材匹配的音色，可以改用授权成曲或单纯拟音。用项目自己的节型、终止式与落点重写音乐。
+每个音符依次为乐器、拍内位置、峰值衰减 dB、移调半音、声像（−1 到 1），长音色可再补第 6 项持续拍数。除原有的 `kick`/`rim`/`hat`/`marimba`/`pluck` 采样外，还内置温暖低音 `bass`、和弦铺底 `pad`（第 4 项可传半音列表如 `[0, 4, 7]`）与晶莹提示 `bell`；段落支持 `swing`（0–0.35 摇摆微偏移）、`fade_in` 与平滑余弦 `fade_out`，顶层可设 `reverb`（0–0.6 立体声小厅混响）。区域起点与终点绑定 shot id，offset 和 end_offset 是秒。无 until 时延续到片尾。未编配的区间保持静音；选取与本片动作、题材匹配的音色，可以改用授权成曲或单纯拟音。用项目自己的节型、终止式与落点重写音乐。另可在配音后跑 `prepare.py --audit` 或在 `review.py` 查看 `pace.editorial_diagnostics`，用数据复核切镜节律、静帧长度、数字停顿与收束留白。

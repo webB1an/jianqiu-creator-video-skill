@@ -13,5 +13,57 @@
   "sample_rate": 24000,
   "prompt_text": "我是见秋。早上九点，我的手机会收到这样一条消息。",
   "speed": 1.04,
-  "num_steps": 8
+  "num_steps": 8,
+  "moods": {
+    "hook": {
+      "prompt": "prompt-hook.wav",
+      "prompt_sha256": "cf9fa3e70b40c8a8846130931e4aed28c6a817b57e81a0ec55e169dbf7578700",
+      "prompt_text": "我是见秋。早上九点，我的手机会收到这样一条消息。",
+      "source_span_seconds": [
+        0.02,
+        4.28
+      ],
+      "note": "取自 original.mp3 0.02–4.28s，微提节奏与存在感作为高能开场参考音"
+    },
+    "curious": {
+      "prompt": "prompt-curious.wav",
+      "prompt_sha256": "a86806ba2ed707ca156dc8481c7eea41659ed01c7ae9b67a70ed649ade9b5d12",
+      "prompt_text": "天气，生日，还有那些容易忙忘的小事，都替我记着。",
+      "source_span_seconds": [
+        4.88,
+        9.95
+      ],
+      "note": "取自 original.mp3 4.88–9.95s 真实对话列举段，自带自然起伏与悬念气口"
+    },
+    "suspense": {
+      "prompt": "prompt-suspense.wav",
+      "prompt_sha256": "0f3343892767245e1ccdf8ba2e830adec263ac77a26015d8fb49a4b2656f835e",
+      "prompt_text": "还有那些容易忙忘的小事，都替我记着。把想法，做成日常。",
+      "source_span_seconds": [
+        7.05,
+        13.4
+      ],
+      "note": "取自 original.mp3 7.05–13.40s 轻缓段，略降语速并增近讲低频用于悬念压低"
+    },
+    "reveal": {
+      "prompt": "prompt-reveal.wav",
+      "prompt_sha256": "226fc324eb921da5224a4eafb6c0bdf529bf77ea1bbfcb9025741f966ed0ff43",
+      "prompt_text": "我是见秋。早上九点，我的手机会收到这样一条消息。",
+      "source_span_seconds": [
+        0.02,
+        4.28
+      ],
+      "note": "取自 original.mp3 0.02–4.28s，略放慢并强化中频笃定感用于核心揭示"
+    },
+    "warm": {
+      "prompt": "prompt-warm.wav",
+      "prompt_sha256": "bee6ece3e133495302a146ccd54370a178571ace8b527c933295063d09c7c575",
+      "prompt_text": "还有那些容易忙忘的小事，都替我记着。把想法，做成日常。",
+      "source_span_seconds": [
+        7.05,
+        13.4
+      ],
+      "note": "取自 original.mp3 7.05–13.40s 原声收尾段，温暖舒缓收束"
+    }
+  }
 }
